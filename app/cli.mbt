@@ -8,6 +8,8 @@ fn help() -> String {
   #|    --label <text> --exclude <relative>    Repeat exclude; exact path prefixes
   #|    --min <bytes> --avg <bytes> --max <bytes>  CDC tuning
   #|  list <repository>                       List validated snapshots
+  #|  plan <repository> <source> --exclude <relative>  Preflight without payload writes
+  #|  status <repository>                     Storage and orphan inventory (no deletion)
   #|  verify <repository> <snapshot-id|all>    Full file/chunk verification
   #|  restore <repository> <id> <NEW-target>   No overwrite; full pre-verification
   #|    --prefix <relative>                   Restore one file/subtree
@@ -37,8 +39,8 @@ pub fn run(args : Array[String]) -> Unit raise {
   if args[0] == "version" { println("MoonRestore 0.1.0"); return }
   let command = args[0]
   let required = match command {
-    "init" | "list" | "recover" => 2
-    "backup" | "verify" => 3
+    "init" | "list" | "recover" | "status" => 2
+    "backup" | "verify" | "plan" => 3
     "restore" | "diff" => 4
     _ => raise @core.Invalid("unknown command; use help")
   }
@@ -59,7 +61,7 @@ pub fn run(args : Array[String]) -> Unit raise {
     used[key] = true
     match (command, key) {
       ("backup", "--label") => label = value
-      ("backup", "--exclude") => { @core.validate_path(value); excludes.push(value) }
+      ("backup", "--exclude") | ("plan", "--exclude") => { @core.validate_path(value); excludes.push(value) }
       ("backup", "--min") => minimum = parse_size(value)
       ("backup", "--avg") => average = parse_size(value)
       ("backup", "--max") => maximum = parse_size(value)
@@ -81,6 +83,8 @@ pub fn run(args : Array[String]) -> Unit raise {
     "backup" => backup(args[2], label, excludes,
       {min_size: minimum, average_size: average, max_size: maximum}, @core.Limits::default())
     "list" => list_snapshots()
+    "status" => status()
+    "plan" => plan_backup(args[2], excludes)
     "verify" => if args[2] == "all" {
       let ids : Array[String] = @json.from_json(io("list", Json::null()))
       let reports : Array[Json] = []

@@ -198,3 +198,17 @@ test('seeded multi-version user simulations restore byte-identical trees',()=>{
     }
   }finally{f.cleanup();}
 });
+
+test('preflight writes no payload and status distinguishes orphan inventory from integrity',()=>{
+  const f=fixture();try {
+    put(f.source,'data','original');put(f.source,'private/secret','not included');
+    const plan=call(['plan',f.repo,f.source,'--exclude','private']);assert.equal(plan.payload_written,false);assert.equal(plan.logical_bytes,'8');
+    assert.deepEqual(fs.readdirSync(path.join(f.repo,'objects')),[]);assert.deepEqual(fs.readdirSync(path.join(f.repo,'snapshots')),[]);
+    backup(f,'--exclude','private');backup(f,'--exclude','private');
+    const report=call(['status',f.repo]);assert.equal(report.snapshots,2);assert.equal(report.logical_bytes_all_snapshots,'16');
+    assert.equal(report.stored_object_bytes,'8');assert.equal(report.integrity_verified,false);assert.deepEqual(report.unreferenced_objects,[]);
+    put(f.source,'data','modified');call(['backup',f.repo,f.source,'--exclude','private'],{status:1,env:{MOONRESTORE_TEST_FAILURE:'manifest-written'}});
+    const orphan=call(['status',f.repo]);assert.ok(orphan.unreferenced_objects.length>0);
+    call(['recover',f.repo]);assert.equal(call(['status',f.repo]).unreferenced_objects.length,orphan.unreferenced_objects.length);
+  }finally{f.cleanup();}
+});

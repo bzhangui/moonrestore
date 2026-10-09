@@ -254,6 +254,25 @@ export class Host {
         } } finally { dir.closeSync(); }
         return ids.sort();
       }
+      case 'inventory': {
+        this.requireLock(); const out = [];
+        const root = this.repoPath('objects'); const shards = fs.opendirSync(root);
+        try { for(let shard=shards.readSync();shard!==null;shard=shards.readSync()) {
+          if(!/^[a-f0-9]{2}$/.test(shard.name)) throw new Error('Unexpected object shard');
+          const p=checkedPath(path.join(root,shard.name));
+          if(!fs.lstatSync(p).isDirectory()) throw new Error('Invalid object shard');
+          const files=fs.opendirSync(p);
+          try { for(let file=files.readSync();file!==null;file=files.readSync()) {
+            idPath(file.name);
+            if(!file.name.startsWith(shard.name)) throw new Error('Object in incorrect shard');
+            const s=fs.lstatSync(checkedPath(path.join(p,file.name)));
+            if(!s.isFile()||s.nlink!==1||s.size>1048576) throw new Error('Invalid object file');
+            if(out.length>=1000000) throw new Error('Object inventory limit exceeded');
+            out.push({id:file.name,size:s.size});
+          }} finally {files.closeSync();}
+        }} finally {shards.closeSync();}
+        return out;
+      }
       case 'recover': {
         const p = this.repoPath('.lock');
         if (exists(p)) {
@@ -267,12 +286,15 @@ export class Host {
         let removed = 0;
         // Temp cleanup only; committed chunks/snapshots are NEVER deleted here.
         const dir = this.repoPath('tmp');
-        for (const name of fs.readdirSync(dir)) {
+        const files=fs.opendirSync(dir); let visited=0;
+        try { for(let entry=files.readSync();entry!==null;entry=files.readSync()) {
+          if(++visited>100000) throw new Error('Temporary entry limit exceeded');
+          const name=entry.name;
           if (!/^[a-f0-9-]{36}\.(part|manifest)$/.test(name)) continue;
           const f = checkedPath(path.join(dir,name));
           if (!fs.lstatSync(f).isFile()) throw new Error('Unexpected temporary entry');
           fs.unlinkSync(f); removed++;
-        }
+        }} finally {files.closeSync();}
         this.unlock(); return {removed_temporary_files: removed, committed_data_deleted: false};
       }
       case 'begin_restore': {
