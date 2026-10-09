@@ -34,7 +34,9 @@ while ($true) {
             $snapshotLabel = Read-Host '本次备份备注（可为空）'
             Invoke-MoonRestore -Arguments @('plan',$repositoryPath,$sourcePath)
             if ($LASTEXITCODE -eq 0 -and (Read-Host '确认执行备份？输入 yes') -ceq 'yes') {
-                Invoke-MoonRestore -Arguments @('backup',$repositoryPath,$sourcePath,'--label',$snapshotLabel)
+                $backupArguments = @('backup',$repositoryPath,$sourcePath)
+                if ($snapshotLabel.Length -gt 0) { $backupArguments += @('--label',$snapshotLabel) }
+                Invoke-MoonRestore -Arguments $backupArguments
             }
         }
         '3' { Invoke-MoonRestore -Arguments @('list',$repositoryPath) }

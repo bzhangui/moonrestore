@@ -6,7 +6,7 @@ import assert from 'node:assert/strict';
 import {spawnSync} from 'node:child_process';
 import {fileURLToPath} from 'node:url';
 const cli=fileURLToPath(new URL('../bin/moonrestore.mjs',import.meta.url));
-const base=fs.mkdtempSync(path.join(os.tmpdir(),'moonrestore-demo-'));
+const base=fs.mkdtempSync(path.join(fs.realpathSync(os.tmpdir()),'moonrestore-demo-'));
 function run(...args){const r=spawnSync(process.execPath,[cli,...args],{encoding:'utf8',timeout:30000});if(r.status!==0)throw new Error(r.stderr);return JSON.parse(r.stdout);}
 const source=path.join(base,'paper'),repo=path.join(base,'vault'),restored=path.join(base,'restored');
 fs.mkdirSync(source);fs.writeFileSync(path.join(source,'notes.md'),'可恢复的第一稿\n');

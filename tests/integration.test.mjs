@@ -212,3 +212,12 @@ test('preflight writes no payload and status distinguishes orphan inventory from
     call(['recover',f.repo]);assert.equal(call(['status',f.repo]).unreferenced_objects.length,orphan.unreferenced_objects.length);
   }finally{f.cleanup();}
 });
+
+test('status missing-object diagnosis returns a nonzero process exit',()=>{
+  const f=fixture();try {
+    put(f.source,'data','original');const b=backup(f);const id=snapshot(f,b.snapshot).entries[0].chunks[0].id;
+    fs.unlinkSync(path.join(f.repo,'objects',id.slice(0,2),id));
+    const failure=call(['status',f.repo],{status:1});const report=JSON.parse(failure.stdout);
+    assert.equal(report.ok,false);assert.deepEqual(report.missing_or_wrong_size_objects,[id]);assert.equal(report.integrity_verified,false);
+  }finally{f.cleanup();}
+});

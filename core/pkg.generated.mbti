@@ -12,7 +12,7 @@ pub fn check_json_depth(String) -> Unit raise BackupError
 
 pub fn chunk(Bytes, config? : ChunkConfig) -> Array[Bytes] raise BackupError
 
-pub fn decode_snapshot(String, String) -> Snapshot raise
+pub fn decode_snapshot(String, String, limits? : Limits) -> Snapshot raise
 
 pub fn diff(Snapshot, Snapshot) -> Array[Change] raise BackupError
 
@@ -120,7 +120,7 @@ pub(all) struct Snapshot {
   config : ChunkConfig
   entries : Array[Entry]
 } derive(Eq, ToJson, @debug.Debug, @json.FromJson)
-pub fn Snapshot::encode(Self) -> String raise BackupError
+pub fn Snapshot::encode(Self, limits? : Limits) -> String raise BackupError
 pub fn Snapshot::equal(Self, Self) -> Bool
 pub fn Snapshot::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn Snapshot::not_equal(Self, Self) -> Bool

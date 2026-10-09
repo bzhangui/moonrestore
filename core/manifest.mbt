@@ -127,10 +127,22 @@ pub fn Snapshot::validate(
 }
 
 ///|
-pub fn Snapshot::encode(self : Snapshot) -> String raise BackupError {
-  self.validate()
+pub fn Snapshot::encode(
+  self : Snapshot,
+  limits? : Limits = Limits::default(),
+) -> String raise BackupError {
+  self.validate(limits~)
+  let mut minimum_bytes = 0L
+  for entry in self.entries {
+    minimum_bytes += @utf8.encode(entry.path).length().to_int64() +
+      entry.hash.length().to_int64() +
+      entry.chunks.length().to_int64() * 64L
+    guard minimum_bytes <= limits.max_manifest_bytes.to_int64() else {
+      raise Invalid("manifest byte limit exceeded")
+    }
+  }
   let text = self.to_json().stringify()
-  guard @utf8.encode(text).length() <= Limits::default().max_manifest_bytes else {
+  guard @utf8.encode(text).length() <= limits.max_manifest_bytes else {
     raise Invalid("manifest byte limit exceeded")
   }
   text
@@ -138,18 +150,27 @@ pub fn Snapshot::encode(self : Snapshot) -> String raise BackupError {
 
 ///|
 /// Verify raw manifest bytes before parsing and limit JSON nesting explicitly.
-pub fn decode_snapshot(text : String, expected_id : String) -> Snapshot raise {
-  guard valid_id(expected_id) && text_digest(text) == expected_id else {
-    raise Invalid("manifest SHA-256 mismatch")
-  }
-  guard @utf8.encode(text).length() <= Limits::default().max_manifest_bytes else {
+pub fn decode_snapshot(
+  text : String,
+  expected_id : String,
+  limits? : Limits = Limits::default(),
+) -> Snapshot raise {
+  limits.validate()
+  guard text.length() <= limits.max_manifest_bytes else {
     raise Invalid("manifest byte limit exceeded")
+  }
+  let bytes = @utf8.encode(text)
+  guard bytes.length() <= limits.max_manifest_bytes else {
+    raise Invalid("manifest byte limit exceeded")
+  }
+  guard valid_id(expected_id) && digest(bytes) == expected_id else {
+    raise Invalid("manifest SHA-256 mismatch")
   }
   check_json_depth(text)
   let json = @json.parse(text)
   check_integer_fields(json)
   let snapshot : Snapshot = @json.from_json(json)
-  snapshot.validate()
+  snapshot.validate(limits~)
   snapshot
 }
 

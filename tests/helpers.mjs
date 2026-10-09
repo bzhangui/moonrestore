@@ -17,12 +17,12 @@ export function call(args, {env={}, status=0}={}) {
   return JSON.parse(r.stdout.trim());
 }
 export function fixture() {
-  const base = fs.mkdtempSync(path.join(os.tmpdir(),'moonrestore-test-'));
+  const base = fs.mkdtempSync(path.join(fs.realpathSync(os.tmpdir()),'moonrestore-test-'));
   const source = path.join(base,'source'); fs.mkdirSync(source);
   const repo = path.join(base,'vault'); call(['init',repo]);
   return {base,source,repo,cleanup() {
     const exact = path.resolve(base);
-    assert.equal(path.dirname(exact),path.resolve(os.tmpdir()));
+    assert.equal(path.dirname(exact),path.resolve(fs.realpathSync(os.tmpdir())));
     assert.ok(path.basename(exact).startsWith('moonrestore-test-'));
     fs.rmSync(exact,{recursive:true,force:true});
   }};

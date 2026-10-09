@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import {spawnSync} from 'node:child_process';
 import {fileURLToPath} from 'node:url';
 const cli=fileURLToPath(new URL('../bin/moonrestore.mjs',import.meta.url));
-const base=fs.mkdtempSync(path.join(os.tmpdir(),'moonrestore-scenarios-'));
+const base=fs.mkdtempSync(path.join(fs.realpathSync(os.tmpdir()),'moonrestore-scenarios-'));
 function run(...args){const r=spawnSync(process.execPath,[cli,...args],{encoding:'utf8',timeout:30000});if(r.status!==0)throw new Error(r.stderr);return JSON.parse(r.stdout);}
 function prepare(name){const root=path.join(base,name),source=path.join(root,'source'),repo=path.join(root,'vault');fs.mkdirSync(source,{recursive:true});run('init',repo);return {root,source,repo};}
 function put(root,rel,bytes){const p=path.join(root,rel);fs.mkdirSync(path.dirname(p),{recursive:true});fs.writeFileSync(p,bytes);}

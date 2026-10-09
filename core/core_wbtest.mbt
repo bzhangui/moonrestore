@@ -206,6 +206,22 @@ fn[X] expect_error(run : () -> X raise) -> Unit raise {
 }
 
 ///|
+test "manifest budgets reject before parsing with caller-lowered policy" {
+  let s = sample()
+  let text = s.encode()
+  let limits = { ..Limits::default(), max_manifest_bytes: 32, }
+  expect_error(fn() raise { s.encode(limits~) })
+  expect_error(fn() raise { decode_snapshot(text, text_digest(text), limits~) })
+  expect_error(fn() raise {
+    s.encode(limits={ ..Limits::default(), max_manifest_bytes: 200, })
+  })
+  let tiny_files = { ..Limits::default(), max_files: 1, }
+  expect_error(fn() raise {
+    decode_snapshot(text, text_digest(text), limits=tiny_files)
+  })
+}
+
+///|
 test "deep JSON quoted braces and fractional numbers" {
   check_json_depth("{\"text\":\"{{{[\\\"]\"}")
   expect_error(fn() raise { check_json_depth("[".repeat(17) + "]".repeat(17)) })

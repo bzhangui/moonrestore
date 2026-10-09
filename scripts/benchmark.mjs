@@ -7,7 +7,7 @@ import {spawnSync} from 'node:child_process';
 import {createHash} from 'node:crypto';
 import {fileURLToPath} from 'node:url';
 const project=fileURLToPath(new URL('../',import.meta.url));
-const base=fs.mkdtempSync(path.join(os.tmpdir(),'moonrestore-bench-'));
+const base=fs.mkdtempSync(path.join(fs.realpathSync(os.tmpdir()),'moonrestore-bench-'));
 const source=path.join(base,'source'),repo=path.join(base,'vault');fs.mkdirSync(source);
 const records=[];
 function run(name,...args){const start=performance.now();const r=spawnSync(process.execPath,[path.join(project,'bin','moonrestore.mjs'),...args],{encoding:'utf8',timeout:60000,env:{...process.env,MOONRESTORE_PROFILE:'1'}});if(r.status!==0)throw new Error(r.stderr);
@@ -25,5 +25,5 @@ const report={controlled_sample:true,production_benchmark:false,platform:process
 const dir=path.join(project,'.local','benchmarks');fs.mkdirSync(dir,{recursive:true});
 const output=path.join(dir,`benchmark-${Date.now()}.json`);fs.writeFileSync(output,JSON.stringify(report,null,2),{flag:'wx'});
 console.log(JSON.stringify({...report,report_file:output},null,2));
-assert.equal(path.dirname(path.resolve(base)),path.resolve(os.tmpdir()));assert.ok(path.basename(base).startsWith('moonrestore-bench-'));
+assert.equal(path.dirname(path.resolve(base)),path.resolve(fs.realpathSync(os.tmpdir())));assert.ok(path.basename(base).startsWith('moonrestore-bench-'));
 fs.rmSync(base,{recursive:true,force:true});

@@ -30,6 +30,6 @@ fn main {
     ignore(@backup.decode_snapshot(text, id))
     println("snapshot=\{id}; chunks=\{pieces.length()}; verified=true")
   } catch {
-    e => println("example failed: \{e}")
+    e => abort("example failed: \{e}")
   }
 }
