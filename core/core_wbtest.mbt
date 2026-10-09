@@ -52,7 +52,7 @@ test "configuration validation rejects bad and unbounded sizes" {
     { min_size: 64, average_size: 129, max_size: 512 },
     { min_size: 64, average_size: 128, max_size: 1048577 },
   ] {
-    expect_error(fn() { cfg.validate() })
+    expect_error(fn() raise { cfg.validate() })
   }
 }
 
@@ -63,7 +63,7 @@ test "portable path validation" {
   }
   for path in ["", "/etc/passwd", "../a", "a/../b", "a//b", "a\\b", "C:/a",
     "a:b", "CON", "NUL.txt", "com1.TXT", "LPT9", "a.", "a ", "a\n", "a/?"] {
-    expect_error(fn() { validate_path(path) })
+    expect_error(fn() raise { validate_path(path) })
   }
 }
 
@@ -82,9 +82,9 @@ fn sample() -> Snapshot {
 test "manifest roundtrip and SHA tamper rejection" {
   let text = sample().encode()
   assert_eq(decode_snapshot(text, text_digest(text)), sample())
-  expect_error(fn() { decode_snapshot(text + " ", text_digest(text)) })
-  expect_error(fn() { decode_snapshot(text, "../bad") })
-  expect_error(fn() { decode_snapshot("not json", text_digest("not json")) })
+  expect_error(fn() raise { decode_snapshot(text + " ", text_digest(text)) })
+  expect_error(fn() raise { decode_snapshot(text, "../bad") })
+  expect_error(fn() raise { decode_snapshot("not json", text_digest("not json")) })
 }
 
 ///|
@@ -96,32 +96,32 @@ test "manifest rejects duplicates case collisions and missing parent" {
     {..s.entries[1], path: "../hello"}] {
     let entries = s.entries.copy()
     entries.push(entry)
-    expect_error(fn() { Snapshot::{..s, entries}.validate() })
+    expect_error(fn() raise { Snapshot::{..s, entries}.validate() })
   }
 }
 
 ///|
 test "manifest rejects hashes sizes kinds formats and limits" {
   let s = sample()
-  expect_error(fn() { Snapshot::{..s, format: 2}.validate() })
+  expect_error(fn() raise { Snapshot::{..s, format: 2}.validate() })
   for e in [{..s.entries[1], size: -1L}, {..s.entries[1], size: 4L},
     {..s.entries[1], hash: "bad"}, {..s.entries[1], kind: "link"},
     {..s.entries[0], size: 1L}, {..s.entries[2], hash: digest(b"a")},
     {..s.entries[1], chunks: [{id: digest(b"abc"), size: 0}]}] {
-    expect_error(fn() { Snapshot::{..s, entries: [s.entries[0], e]}.validate() })
+    expect_error(fn() raise { Snapshot::{..s, entries: [s.entries[0], e]}.validate() })
   }
-  expect_error(fn() { s.validate(limits={..Limits::default(), max_files: 1}) })
-  expect_error(fn() { s.validate(limits={..Limits::default(), max_total_bytes: 2L}) })
-  expect_error(fn() { s.validate(limits={..Limits::default(), max_chunks: 0}) })
+  expect_error(fn() raise { s.validate(limits={..Limits::default(), max_files: 1}) })
+  expect_error(fn() raise { s.validate(limits={..Limits::default(), max_total_bytes: 2L}) })
+  expect_error(fn() raise { s.validate(limits={..Limits::default(), max_chunks: 0}) })
 }
 
 ///|
 test "object corruption wrong size and empty" {
   let part : ChunkRef = {id: digest(b"abc"), size: 3}
   verify_chunk(part, b"abc")
-  expect_error(fn() { verify_chunk(part, b"abd") })
-  expect_error(fn() { verify_chunk(part, b"ab") })
-  expect_error(fn() { verify_chunk(part, b"") })
+  expect_error(fn() raise { verify_chunk(part, b"abd") })
+  expect_error(fn() raise { verify_chunk(part, b"ab") })
+  expect_error(fn() raise { verify_chunk(part, b"") })
 }
 
 ///|

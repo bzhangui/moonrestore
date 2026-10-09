@@ -155,6 +155,15 @@ pub fn diff(before : Snapshot, after : Snapshot) -> Array[Change] raise BackupEr
   for entry in before.entries {
     if !current.contains(entry.path) { out.push({ path: entry.path, change: "removed" }) }
   }
-  out.sort_by(fn(a,b) { a.path.compare(b.path) })
+  out.sort_by(fn(a,b) { path_order(a.path, b.path) })
   out
+}
+
+///| Lexicographic order independent of the core String length-first ordering.
+pub fn path_order(a : String, b : String) -> Int {
+  for i = 0; i < a.length().min(b.length()); i = i + 1 {
+    if a[i] < b[i] { return -1 }
+    if a[i] > b[i] { return 1 }
+  }
+  a.length().compare(b.length())
 }
