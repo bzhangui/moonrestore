@@ -1,6 +1,6 @@
 ///|
 extern "js" fn report_error(message : String) -> Unit =
-  #| message => { console.error(JSON.stringify({ok: false, error: message})); process.exitCode = 1; }
+  #| message => { console.error(JSON.stringify({ok: false, error: message, staging: globalThis.__moonrestore_host.restore?.stage ?? null})); process.exitCode = 1; }
 
 ///|
 fn main {

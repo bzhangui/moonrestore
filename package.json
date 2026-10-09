@@ -5,7 +5,7 @@
   "type": "module",
   "engines": {"node": ">=22"},
   "scripts": {
-    "build": "moon build --target js --release --deny-warn",
+    "build": "node scripts/build.mjs",
     "test": "node --test tests/*.test.mjs",
     "demo": "node examples/demo.mjs"
   }

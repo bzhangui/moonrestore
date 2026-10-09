@@ -4,6 +4,16 @@ import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 import { randomUUID } from 'node:crypto';
+import { spawnSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
+
+function publishDirectory(source, target) {
+  if (process.platform === 'win32') { fs.renameSync(source,target); return; }
+  const helper = fileURLToPath(new URL('../_build/host/rename_noreplace',import.meta.url));
+  if (!exists(helper)) throw new Error('Exclusive rename helper missing; run npm run build');
+  const result = spawnSync(helper,[source,target],{encoding:'utf8',timeout:10000,shell:false});
+  if (result.error || result.status !== 0) throw new Error(result.error?.message || result.stderr.trim() || 'Exclusive rename failed');
+}
 
 const MAGIC = 'moonrestore-repository-v1\n';
 const exists = p => { try { fs.lstatSync(p); return true; } catch (e) { if (e.code === 'ENOENT') return false; throw e; } };
@@ -28,7 +38,7 @@ function checkedPath(input, mustExist = true) {
 function safeRelative(rel) {
   if (typeof rel !== 'string' || !rel || rel.length > 1024 || /[\x00-\x1f\x7f\\:*?"<>|]/u.test(rel)) throw new Error('Unsafe relative path');
   for (const part of rel.split('/')) {
-    if (!part || part === '.' || part === '..' || part.length > 255 || /[. ]$/.test(part) || /^(con|prn|aux|nul|conin\$|conout\$|com[1-9]|lpt[1-9])(?:\.|$)/i.test(part)) throw new Error('Unsafe relative component');
+    if (!part || part === '.' || part === '..' || part.length > 255 || /[. ]$/.test(part) || /^(con|prn|aux|nul|conin\$|conout\$|com[1-9¹²³]|lpt[1-9¹²³])(?:\.|$)/i.test(part)) throw new Error('Unsafe relative component');
   }
   return rel;
 }
@@ -73,7 +83,7 @@ function writeNew(p, bytes) {
 export class Host {
   constructor() {
     this.repo = null; this.held = false; this.source = null;
-    this.sourceEntries = new Map(); this.reader = null; this.restore = null;
+    this.sourceEntries = new Map(); this.sourceRootStat = null; this.reader = null; this.restore = null;
     this.bytes = new Uint8Array(); this.writes = 0;
   }
   execute(op, text, bytes) {
@@ -135,7 +145,7 @@ export class Host {
     const root = checkedPath(source);
     if (!fs.lstatSync(root).isDirectory()) throw new Error('Source must be a directory');
     if (contains(root, this.repo) || contains(this.repo, root)) throw new Error('Source and repository must not overlap');
-    this.source = root; this.sourceEntries.clear();
+    this.source = root; this.sourceRootStat = fs.lstatSync(root); this.sourceEntries.clear();
     const out = []; let total = 0;
     for (const rel of excludes) safeRelative(rel);
     const skipped = rel => excludes.some(ex => rel === ex || rel.startsWith(ex + '/'));
@@ -215,6 +225,7 @@ export class Host {
         return null;
       }
       case 'check_source': {
+        if (!this.unchanged(this.sourceRootStat,fs.lstatSync(checkedPath(this.source)))) throw new Error('Source root changed during backup');
         for (const {p, stat} of this.sourceEntries.values()) {
           if (!this.unchanged(stat, fs.lstatSync(checkedPath(p)))) throw new Error('Source tree changed during backup');
         }
@@ -294,7 +305,7 @@ export class Host {
         const r = this.restore; if (!r || r.fd !== null) throw new Error('Invalid restore completion');
         if (exists(r.target)) throw new Error('Restore target appeared; refusing overwrite');
         checkedPath(r.parent); syncDir(r.stage); this.failpoint('restore-complete');
-        fs.renameSync(r.stage,r.target); syncDir(r.parent); this.restore = null;
+        publishDirectory(r.stage,r.target); syncDir(r.parent); this.restore = null;
         return {target: r.target};
       }
       default: throw new Error(`Unsupported operation: ${op}`);

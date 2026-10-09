@@ -20,7 +20,7 @@ pub fn validate_path(path : String) -> Unit raise BackupError {
     if stem == "CON" || stem == "PRN" || stem == "AUX" || stem == "NUL" ||
       stem == "CONIN$" || stem == "CONOUT$" ||
       (stem.length() == 4 && (stem.has_prefix("COM") || stem.has_prefix("LPT")) &&
-       stem[3] >= '1' && stem[3] <= '9') {
+       ((stem[3] >= '1' && stem[3] <= '9') || stem[3] == '¹' || stem[3] == '²' || stem[3] == '³')) {
       raise Invalid("reserved Windows name: \{path}")
     }
   }
@@ -28,20 +28,21 @@ pub fn validate_path(path : String) -> Unit raise BackupError {
 
 ///|
 pub fn Snapshot::validate(self : Snapshot, limits? : Limits = Limits::default()) -> Unit raise BackupError {
+  limits.validate()
   guard self.format == 1 else { raise Invalid("unsupported snapshot format") }
   self.config.validate()
   guard self.label.length() <= 200 && self.created.length() <= 80 &&
     self.entries.length() <= limits.max_files else {
     raise Invalid("snapshot metadata budget exceeded")
   }
-  let paths : Map[String, String] = Map([])
+  let paths : Map[String, (String, String)] = Map([])
   let mut total = 0L
   let mut chunks = 0
   for entry in self.entries {
     validate_path(entry.path)
     let key = entry.path.to_lower()
     guard !paths.contains(key) else { raise Invalid("duplicate/case-colliding path") }
-    paths[key] = entry.kind
+    paths[key] = (entry.path, entry.kind)
     guard entry.size >= 0L && entry.size <= limits.max_file_bytes else {
       raise Invalid("file size limit exceeded")
     }
@@ -76,7 +77,7 @@ pub fn Snapshot::validate(self : Snapshot, limits? : Limits = Limits::default())
     let mut parent = ""
     for i = 0; i < parts.length() - 1; i = i + 1 {
       parent = if i == 0 { parts[i].to_owned() } else { parent + "/" + parts[i].to_owned() }
-      guard paths.get(parent.to_lower()) == Some("dir") else {
+      guard paths.get(parent.to_lower()) == Some((parent, "dir")) else {
         raise Invalid("missing parent directory or file/directory conflict")
       }
     }
@@ -102,9 +103,42 @@ pub fn decode_snapshot(text : String, expected_id : String) -> Snapshot raise {
     raise Invalid("manifest byte limit exceeded")
   }
   check_json_depth(text)
-  let snapshot : Snapshot = @json.from_json(@json.parse(text))
+  let json = @json.parse(text)
+  check_integer_fields(json)
+  let snapshot : Snapshot = @json.from_json(json)
   snapshot.validate()
   snapshot
+}
+
+///| Core Int decoding truncates fractions; format 1 instead requires exact integers.
+fn exact_int(value : Json, max : Int) -> Unit raise BackupError {
+  guard value is Number(n, ..) && n >= 0.0 && n <= max.to_double() &&
+    n == n.to_int().to_double() else { raise Invalid("expected bounded integer") }
+}
+
+///|
+fn check_integer_fields(json : Json) -> Unit raise BackupError {
+  guard json is {"format": format, "config": cfg, "entries": Array(entries), ..} else {
+    raise Invalid("invalid snapshot structure")
+  }
+  exact_int(format, 1)
+  guard cfg is {"min_size": min, "average_size": avg, "max_size": max, ..} else {
+    raise Invalid("invalid chunk configuration structure")
+  }
+  exact_int(min, 1048576)
+  exact_int(avg, 1048576)
+  exact_int(max, 1048576)
+  guard entries.length() <= Limits::default().max_files else { raise Invalid("entry budget exceeded") }
+  let mut count = 0
+  for entry in entries {
+    guard entry is {"chunks": Array(parts), ..} else { raise Invalid("invalid entry structure") }
+    count += parts.length()
+    guard count <= Limits::default().max_chunks else { raise Invalid("chunk budget exceeded") }
+    for part in parts {
+      guard part is {"size": size, ..} else { raise Invalid("invalid chunk structure") }
+      exact_int(size, 1048576)
+    }
+  }
 }
 
 ///| Depth preflight before allocating JSON containers; braces in strings are ignored.

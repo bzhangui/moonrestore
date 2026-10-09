@@ -142,3 +142,25 @@ test "snapshot diff deterministic and complete" {
 fn[X] expect_error(run : () -> X raise) -> Unit raise {
   try run() catch { _ => () } noraise { _ => fail("expected rejection") }
 }
+
+///|
+test "deep JSON quoted braces and fractional numbers" {
+  check_json_depth("{\"text\":\"{{{[\\\"]\"}")
+  expect_error(fn() raise { check_json_depth("[".repeat(17) + "]".repeat(17)) })
+  let text = sample().encode()
+  let fraction = text.replace(old="\"format\":1", new="\"format\":1.5")
+  assert_true(fraction != text)
+  expect_error(fn() raise { decode_snapshot(fraction, text_digest(fraction)) })
+  let bad = text.replace(old="\"size\":3", new="\"size\":3.5")
+  expect_error(fn() raise { decode_snapshot(bad, text_digest(bad)) })
+}
+
+///|
+test "exact-case parent spelling Windows superscripts and invalid limit policy" {
+  expect_error(fn() raise { validate_path("COM¹.txt") })
+  let s = sample()
+  let e = {..s.entries[1], path: "DATA/hello.txt"}
+  expect_error(fn() raise { Snapshot::{..s, entries: [s.entries[0],e]}.validate() })
+  expect_error(fn() raise { Limits::{..Limits::default(), max_files: -1}.validate() })
+  expect_error(fn() raise { Limits::{..Limits::default(), max_chunks: 2000000}.validate() })
+}

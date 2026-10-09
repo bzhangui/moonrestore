@@ -33,7 +33,9 @@ fn get_object(part : @core.ChunkRef) -> Bytes raise {
 fn read_snapshot(id : String) -> @core.Snapshot raise {
   guard @core.valid_id(id) else { raise @core.Invalid("snapshot ID must be 64 lowercase hexadecimal characters") }
   io_unit("manifest", { "id": id })
-  @core.decode_snapshot(@utf8.decode(returned_bytes()), id)
+  let bytes = returned_bytes()
+  guard @core.digest(bytes) == id else { raise @core.Invalid("manifest SHA-256 mismatch") }
+  @core.decode_snapshot(@utf8.decode(bytes), id)
 }
 
 ///|

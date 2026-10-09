@@ -19,6 +19,17 @@ pub fn Limits::default() -> Limits {
     max_manifest_bytes: 33554432 }
 }
 
+///| A caller can lower budgets, not bypass the format's hard resource ceiling.
+pub fn Limits::validate(self : Limits) -> Unit raise BackupError {
+  let hard = Limits::default()
+  guard self.max_files >= 0 && self.max_files <= hard.max_files &&
+    self.max_file_bytes >= 0L && self.max_file_bytes <= hard.max_file_bytes &&
+    self.max_total_bytes >= 0L && self.max_total_bytes <= hard.max_total_bytes &&
+    self.max_chunks >= 0 && self.max_chunks <= hard.max_chunks &&
+    self.max_manifest_bytes > 0 && self.max_manifest_bytes <= hard.max_manifest_bytes
+  else { raise Invalid("invalid resource limits") }
+}
+
 ///|
 pub(all) struct ChunkConfig {
   min_size : Int
