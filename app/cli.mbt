@@ -32,6 +32,10 @@ fn parse_size(text : String) -> Int raise {
 }
 
 ///|
+extern "js" fn mark_failed() -> Unit =
+  #| () => { process.exitCode = 1; }
+
+///|
 pub fn run(args : Array[String]) -> Unit raise {
   if args.is_empty() || args[0] == "help" || args[0] == "--help" {
     println(help()); return
@@ -97,4 +101,5 @@ pub fn run(args : Array[String]) -> Unit raise {
   }
   io_unit("unlock", Json::null())
   println(result.stringify())
+  if result is {"ok": false, ..} { mark_failed() }
 }
