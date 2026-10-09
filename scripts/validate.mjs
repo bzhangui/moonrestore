@@ -12,6 +12,7 @@ const version=match.slice(1).map(Number);const baseline=[0,10,14];
 let comparison=0;for(let i=0;i<3;i++){if(version[i]!==baseline[i]){comparison=version[i]>baseline[i]?1:-1;break;}}
 if(comparison<0)throw new Error('moonc >= 0.10.14 required');
 console.log(v.stdout.trim());
+run(moon,['update']);
 run(moon,['fmt','--check']);
 for(const target of ['js','wasm','wasm-gc','native']){
   run(moon,['check','--target',target,'--deny-warn']);
