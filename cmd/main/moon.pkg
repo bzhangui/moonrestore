@@ -1,0 +1,8 @@
+import {
+  "bzhangui/moonrestore/app",
+  "moonbitlang/core/env",
+}
+options(
+  "is-main": true,
+)
+supported_targets = "+js"

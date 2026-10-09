@@ -157,7 +157,7 @@ export class Host {
           total += stat.isFile() ? stat.size : 0;
           if (total > limits.max_total_bytes) throw new Error('Source byte limit exceeded');
           const kind = stat.isDirectory() ? 'dir' : 'file';
-          out.push({path: rel, kind, size: kind === 'dir' ? 0 : stat.size});
+          out.push({path: rel, kind, size: String(kind === 'dir' ? 0 : stat.size)});
           this.sourceEntries.set(rel, {p, stat});
           if (kind === 'dir') visit(p, rel, depth + 1);
         }
