@@ -6,6 +6,8 @@ readme = "README.md"
 
 license = "Apache-2.0"
 
+repository = "https://github.com/bzhangui/moonrestore"
+
 description = "Verifiable incremental backups with content-addressed storage and safe restore, powered by MoonBit."
 
 keywords = [ "backup", "restore", "integrity", "deduplication" ]

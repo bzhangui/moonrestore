@@ -1,0 +1,12 @@
+MoonRestore
+Copyright 2026 MoonRestore contributors
+Licensed under the Apache License, Version 2.0.
+
+This distribution links MoonBit core and moonbitlang/x 0.5.5 (SHA-256).
+Copyright 2025-2026 International Digital Economy Academy.
+Both are licensed under Apache-2.0. The corresponding license is included
+in licenses/MoonBit-Apache-2.0.txt. Upstream source attribution is retained.
+
+Node.js is an external runtime, not bundled. Node built-in modules are used
+for filesystem/process capabilities and random temporary names. Content
+hashing in the backup engine is performed by the MoonBit crypto dependency.

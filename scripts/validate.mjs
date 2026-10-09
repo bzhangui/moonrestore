@@ -20,6 +20,6 @@ for(const target of ['js','wasm','wasm-gc','native']){
   run(moon,['run','examples/core','--target',target]);
 }
 run(process.execPath,['scripts/build.mjs']);
-run(process.execPath,['--test','tests/integration.test.mjs','tests/platform.test.mjs','tests/launcher.test.mjs']);
+run(process.execPath,['--test','tests/integration.test.mjs','tests/platform.test.mjs','tests/launcher.test.mjs','tests/package.test.mjs']);
 run(process.execPath,['examples/scenarios.mjs']);
 console.log('All local maintenance checks passed. Remote CI/publication/real hardware durability are separate evidence.');
