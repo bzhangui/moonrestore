@@ -2,6 +2,8 @@
 
 基于 MoonBit 的可验证增量备份工具。备份后能校验完整内容，并恢复指定历史版本。适合论文、代码、实验数据和团队文件资产；独立于 HookLab 与 MoonMQTT。
 
+[公开源码](https://github.com/bzhangui/moonrestore) · [Mooncakes 0.1.0](https://mooncakes.io/docs/bzhangui/moonrestore) · [持续集成](https://github.com/bzhangui/moonrestore/actions) · [发布核验记录](docs/PUBLICATION.md)
+
 ## 已实现
 
 - 流式内容分块（CDC）与 SHA-256 内容寻址，跨文件、跨快照去重。
@@ -74,6 +76,14 @@ Linux/macOS 将盘符路径换成自己的目录即可。恢复后检查 `recove
 ```sh
 moon run examples/core --target wasm
 ```
+
+已发布到 Mooncakes。在你的 MoonBit 项目中执行：
+
+```sh
+moon add bzhangui/moonrestore@0.1.0
+```
+
+对应包的 `moon.pkg` 中添加 `"bzhangui/moonrestore/core" @backup` 导入，参考下面的核心库示例。发布后已从注册表下载到独立项目并验证四目标检查、运行和测试；不是只验证本仓库的相对导入。
 
 参考 [核心库示例](examples/core/main.mbt) 与生成的 [API](core/pkg.generated.mbti)。应用层 `app` 仅支持 JS，需要本项目的 Node 文件适配器，不是独立文件库。
 
