@@ -1,0 +1,133 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "bzhangui/moonrestore/core"
+
+import {
+  "moonbitlang/core/debug",
+  "moonbitlang/core/json",
+  "moonbitlang/x/crypto",
+}
+
+// Values
+pub fn check_json_depth(String) -> Unit raise BackupError
+
+pub fn chunk(Bytes, config? : ChunkConfig) -> Array[Bytes] raise BackupError
+
+pub fn decode_snapshot(String, String) -> Snapshot raise
+
+pub fn diff(Snapshot, Snapshot) -> Array[Change] raise BackupError
+
+pub fn digest(Bytes) -> String
+
+pub fn path_order(String, String) -> Int
+
+pub fn text_digest(String) -> String
+
+pub fn valid_id(String) -> Bool
+
+pub fn validate_path(String) -> Unit raise BackupError
+
+pub fn verify_chunk(ChunkRef, Bytes) -> Unit raise BackupError
+
+// Errors
+pub(all) suberror BackupError {
+  Invalid(String)
+} derive(Eq, @debug.Debug)
+pub fn BackupError::equal(Self, Self) -> Bool
+pub fn BackupError::not_equal(Self, Self) -> Bool
+pub fn BackupError::to_repr(Self) -> @debug.Repr
+
+// Types and methods
+pub(all) struct Change {
+  path : String
+  change : String
+} derive(Eq, ToJson, @debug.Debug)
+pub fn Change::equal(Self, Self) -> Bool
+pub fn Change::not_equal(Self, Self) -> Bool
+pub fn Change::to_json(Self) -> Json
+pub fn Change::to_repr(Self) -> @debug.Repr
+
+pub(all) struct ChunkConfig {
+  min_size : Int
+  average_size : Int
+  max_size : Int
+} derive(Eq, ToJson, @debug.Debug, @json.FromJson)
+pub fn ChunkConfig::default() -> Self
+pub fn ChunkConfig::equal(Self, Self) -> Bool
+pub fn ChunkConfig::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn ChunkConfig::not_equal(Self, Self) -> Bool
+pub fn ChunkConfig::to_json(Self) -> Json
+pub fn ChunkConfig::to_repr(Self) -> @debug.Repr
+pub fn ChunkConfig::validate(Self) -> Unit raise BackupError
+
+pub(all) struct ChunkRef {
+  id : String
+  size : Int
+} derive(Eq, ToJson, @debug.Debug, @json.FromJson)
+pub fn ChunkRef::equal(Self, Self) -> Bool
+pub fn ChunkRef::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn ChunkRef::not_equal(Self, Self) -> Bool
+pub fn ChunkRef::to_json(Self) -> Json
+pub fn ChunkRef::to_repr(Self) -> @debug.Repr
+
+pub struct Chunker {
+  config : ChunkConfig
+  buffer : Array[Byte]
+  mut rolling : UInt
+}
+pub fn Chunker::finish(Self) -> Bytes?
+pub fn Chunker::new(config? : ChunkConfig) -> Self raise BackupError
+pub fn Chunker::push(Self, Bytes) -> Array[Bytes]
+
+pub(all) struct Entry {
+  path : String
+  kind : String
+  size : Int64
+  hash : String
+  chunks : Array[ChunkRef]
+} derive(Eq, ToJson, @debug.Debug, @json.FromJson)
+pub fn Entry::equal(Self, Self) -> Bool
+pub fn Entry::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn Entry::not_equal(Self, Self) -> Bool
+pub fn Entry::to_json(Self) -> Json
+pub fn Entry::to_repr(Self) -> @debug.Repr
+
+pub struct Hasher {
+  context : @crypto.SHA256
+}
+pub fn Hasher::finish(Self) -> String
+pub fn Hasher::new() -> Self
+pub fn Hasher::update(Self, Bytes) -> Unit
+
+pub(all) struct Limits {
+  max_files : Int
+  max_file_bytes : Int64
+  max_total_bytes : Int64
+  max_chunks : Int
+  max_manifest_bytes : Int
+} derive(Eq, ToJson, @debug.Debug, @json.FromJson)
+pub fn Limits::default() -> Self
+pub fn Limits::equal(Self, Self) -> Bool
+pub fn Limits::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn Limits::not_equal(Self, Self) -> Bool
+pub fn Limits::to_json(Self) -> Json
+pub fn Limits::to_repr(Self) -> @debug.Repr
+pub fn Limits::validate(Self) -> Unit raise BackupError
+
+pub(all) struct Snapshot {
+  format : Int
+  created : String
+  label : String
+  config : ChunkConfig
+  entries : Array[Entry]
+} derive(Eq, ToJson, @debug.Debug, @json.FromJson)
+pub fn Snapshot::encode(Self) -> String raise BackupError
+pub fn Snapshot::equal(Self, Self) -> Bool
+pub fn Snapshot::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn Snapshot::not_equal(Self, Self) -> Bool
+pub fn Snapshot::to_json(Self) -> Json
+pub fn Snapshot::to_repr(Self) -> @debug.Repr
+pub fn Snapshot::validate(Self, limits? : Limits) -> Unit raise BackupError
+
+// Type aliases
+
+// Traits

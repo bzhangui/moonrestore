@@ -2,7 +2,7 @@ import {
   "bzhangui/moonrestore/app",
   "moonbitlang/core/env",
 }
-options(
-  "is-main": true,
-)
+
+pkgtype(kind: "executable")
+
 supported_targets = "+js"

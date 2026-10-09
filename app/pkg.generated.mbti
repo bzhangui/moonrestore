@@ -1,0 +1,34 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "bzhangui/moonrestore/app"
+
+import {
+  "bzhangui/moonrestore/core",
+  "moonbitlang/core/json",
+}
+
+// Values
+pub fn backup(String, String, Array[String], @core.ChunkConfig, @core.Limits) -> Json raise
+
+pub fn compare_snapshots(String, String) -> Json raise
+
+pub fn list_snapshots() -> Json raise
+
+pub fn plan_backup(String, Array[String]) -> Json raise
+
+pub fn restore(String, String, String) -> Json raise
+
+pub fn run(Array[String]) -> Unit raise
+
+pub fn status() -> Json raise
+
+pub fn verify(String) -> Json raise
+
+// Errors
+
+// Types and methods
+type SourceEntry derive(@json.FromJson)
+pub fn SourceEntry::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+
+// Type aliases
+
+// Traits

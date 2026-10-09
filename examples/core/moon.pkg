@@ -1,0 +1,5 @@
+import {
+  "bzhangui/moonrestore/core" @backup,
+}
+
+pkgtype(kind: "executable")

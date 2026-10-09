@@ -3,4 +3,5 @@ import {
   "moonbitlang/core/json",
   "moonbitlang/core/encoding/utf8",
 }
+
 supported_targets = "+js"

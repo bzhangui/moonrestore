@@ -1,9 +1,11 @@
-///| Errors never imply that a partial snapshot has been committed.
+///|
+/// Errors never imply that a partial snapshot has been committed.
 pub(all) suberror BackupError {
   Invalid(String)
 } derive(Debug, Eq)
 
-///| All limits are enforced before allocation or publication where possible.
+///|
+/// All limits are enforced before allocation or publication where possible.
 pub(all) struct Limits {
   max_files : Int
   max_file_bytes : Int64
@@ -14,20 +16,31 @@ pub(all) struct Limits {
 
 ///|
 pub fn Limits::default() -> Limits {
-  { max_files: 100000, max_file_bytes: 2147483648L,
-    max_total_bytes: 68719476736L, max_chunks: 1000000,
-    max_manifest_bytes: 33554432 }
+  {
+    max_files: 100000,
+    max_file_bytes: 2147483648L,
+    max_total_bytes: 68719476736L,
+    max_chunks: 1000000,
+    max_manifest_bytes: 33554432,
+  }
 }
 
-///| A caller can lower budgets, not bypass the format's hard resource ceiling.
+///|
+/// A caller can lower budgets, not bypass the format's hard resource ceiling.
 pub fn Limits::validate(self : Limits) -> Unit raise BackupError {
   let hard = Limits::default()
-  guard self.max_files >= 0 && self.max_files <= hard.max_files &&
-    self.max_file_bytes >= 0L && self.max_file_bytes <= hard.max_file_bytes &&
-    self.max_total_bytes >= 0L && self.max_total_bytes <= hard.max_total_bytes &&
-    self.max_chunks >= 0 && self.max_chunks <= hard.max_chunks &&
-    self.max_manifest_bytes > 0 && self.max_manifest_bytes <= hard.max_manifest_bytes
-  else { raise Invalid("invalid resource limits") }
+  guard self.max_files >= 0 &&
+    self.max_files <= hard.max_files &&
+    self.max_file_bytes >= 0L &&
+    self.max_file_bytes <= hard.max_file_bytes &&
+    self.max_total_bytes >= 0L &&
+    self.max_total_bytes <= hard.max_total_bytes &&
+    self.max_chunks >= 0 &&
+    self.max_chunks <= hard.max_chunks &&
+    self.max_manifest_bytes > 0 &&
+    self.max_manifest_bytes <= hard.max_manifest_bytes else {
+    raise Invalid("invalid resource limits")
+  }
 }
 
 ///|
@@ -39,15 +52,18 @@ pub(all) struct ChunkConfig {
 
 ///|
 pub fn ChunkConfig::default() -> ChunkConfig {
-  { min_size: 8192, average_size: 32768, max_size: 131072 }
+  { min_size: 8192, average_size: 32768, max_size: 131072, }
 }
 
 ///|
 pub fn ChunkConfig::validate(self : ChunkConfig) -> Unit raise BackupError {
-  guard self.min_size >= 64 && self.min_size <= self.average_size &&
-    self.average_size <= self.max_size && self.max_size <= 1048576 &&
-    (self.average_size & (self.average_size - 1)) == 0
-  else { raise Invalid("invalid chunk configuration") }
+  guard self.min_size >= 64 &&
+    self.min_size <= self.average_size &&
+    self.average_size <= self.max_size &&
+    self.max_size <= 1048576 &&
+    (self.average_size & (self.average_size - 1)) == 0 else {
+    raise Invalid("invalid chunk configuration")
+  }
 }
 
 ///|
@@ -56,7 +72,8 @@ pub(all) struct ChunkRef {
   size : Int
 } derive(Eq, Debug, ToJson, FromJson)
 
-///| Empty directories are explicit entries; file metadata is deliberately minimal.
+///|
+/// Empty directories are explicit entries; file metadata is deliberately minimal.
 pub(all) struct Entry {
   path : String
   kind : String
@@ -85,10 +102,14 @@ pub fn text_digest(text : String) -> String {
 }
 
 ///|
-pub struct Hasher { context : @crypto.SHA256 }
+pub struct Hasher {
+  context : @crypto.SHA256
+}
 
 ///|
-pub fn Hasher::new() -> Hasher { { context: @crypto.SHA256::new() } }
+pub fn Hasher::new() -> Hasher {
+  { context: @crypto.SHA256::new(), }
+}
 
 ///|
 pub fn Hasher::update(self : Hasher, data : Bytes) -> Unit {
@@ -104,7 +125,6 @@ pub fn Hasher::finish(self : Hasher) -> String {
 
 ///|
 pub fn valid_id(id : String) -> Bool {
-  id.length() == 64 && id.iter().all(fn(c) {
-    (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f')
-  })
+  id.length() == 64 &&
+  id.iter().all(fn(c) { (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') })
 }

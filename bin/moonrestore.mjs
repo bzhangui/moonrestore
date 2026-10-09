@@ -12,4 +12,8 @@ if (!fs.existsSync(fileURLToPath(built))) {
   try { await import(built.href); }
   catch (e) { console.error(`MoonRestore failed: ${e.message}`); process.exitCode = 1; }
   finally { try { host.clean(); } catch(e) { console.error(`Cleanup failed: ${e.message}`); process.exitCode = 1; } }
+  if (process.env.MOONRESTORE_PROFILE === '1') {
+    const usage=process.resourceUsage();
+    console.error(JSON.stringify({profile:true,max_rss_kib:usage.maxRSS,user_cpu_us:usage.userCPUTime,system_cpu_us:usage.systemCPUTime}));
+  }
 }
