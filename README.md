@@ -18,6 +18,8 @@
 获取源码后在项目目录执行（公开仓库地址：`https://github.com/bzhangui/moonrestore`）：
 
 ```sh
+git clone https://github.com/bzhangui/moonrestore.git
+cd moonrestore
 moon version --all
 npm run build
 node bin/moonrestore.mjs help
@@ -85,7 +87,7 @@ node scripts/benchmark.mjs
 node scripts/package.mjs
 ```
 
-`validate` 执行四目标核心检查/构建/测试、格式检查、应用构建和文件系统集成测试。Native 测试需要系统 C 工具链；不会因为编译器缺失而默默略过。CI 分别配置 Windows、Linux、macOS；其远端运行结果须在公开推送后验证。
+`validate` 执行四目标核心检查/构建/测试、格式检查、应用构建和文件系统集成测试。Native 测试需要系统 C 工具链；不会因为编译器缺失而默默略过。2026-10-09 的 [Windows、Linux、macOS CI](https://github.com/bzhangui/moonrestore/actions/runs/37942722864) 均通过；最新运行见仓库 Actions。
 
 更多说明：[维护与故障处理](docs/OPERATIONS.md)、[仓库格式](docs/FORMAT.md)、[安全边界](SECURITY.md)、[测试报告](docs/QUALITY_REPORT.md)、[应用场景](docs/SCENARIOS.md)、[验收进度](docs/ACCEPTANCE.md)。
 
@@ -97,6 +99,6 @@ node scripts/package.mjs
 - 不提供数据库热备份或跨文件事务一致性。备份前暂停写入，数据库先使用其官方导出工具。
 - SHA-256 用于完整性检测，不是加密或身份认证；拥有仓库写权限的攻击者仍可重写整套备份。
 - 首版保留全部历史快照和未引用对象，不自动修复损坏对象、不自动清理历史数据。
-- 当前为本机验证的 0.1.0 版本；公开推送和 Mooncakes 发布已获授权，远端 CI、注册表版本与真实用户试点仍须分别核实，不能当作已满足全部赛事验收要求。
+- 0.1.0 已执行本机及三平台 CI 验证；独立介质、真实 NAS、断电、长期运行与外部用户试点尚未完成，不应当作生产可靠性承诺。
 
 采用 [Apache-2.0](LICENSE)。第三方依赖和算法参考见 [NOTICE](NOTICE) 与 [来源说明](docs/THIRD_PARTY.md)。
