@@ -18,16 +18,17 @@ pub fn backup(
 ) -> Json raise {
   guard label.length() <= 200 else { raise @core.Invalid("label too long") }
   config.validate()
+  let format : Int32 = @json.from_json(io("profile", Json::null()))
   let discovered : Array[SourceEntry] = @json.from_json(
     io("walk", {
       "source": source,
-      "excludes": excludes.to_json(),
+      "excludes": Json(excludes),
       "limits": limits.to_json(),
     }),
   )
   // Validate the entire path tree before storing any source bytes.
   let placeholder = @core.Snapshot::{
-    format: 1,
+    format,
     created: "",
     label,
     config,
@@ -121,24 +122,18 @@ pub fn backup(
   }
   io_unit("check_source", Json::null())
   let created : String = @json.from_json(io("clock", Json::null()))
-  let snapshot : @core.Snapshot = {
-    format: 1,
-    created,
-    label,
-    config,
-    entries,
-  }
+  let snapshot : @core.Snapshot = { format, created, label, config, entries, }
   snapshot.validate(limits~)
-  let text = snapshot.encode()
+  let text = snapshot.encode(limits~)
   let id = @core.text_digest(text)
   io_unit("commit", { "id": id }, data=@utf8.encode(text))
   {
     "ok": true,
     "snapshot": id,
     "entries": entries.length(),
-    "logical_bytes": total.to_json(),
-    "stored_bytes": stored.to_json(),
-    "reused_bytes": reused.to_json(),
+    "logical_bytes": Json(total),
+    "stored_bytes": Json(stored),
+    "reused_bytes": Json(reused),
     "chunks": chunk_count,
   }
 }

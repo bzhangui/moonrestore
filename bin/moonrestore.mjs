@@ -2,6 +2,21 @@
 import { Host } from '../platform/adapter.mjs';
 import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
+import {advanced} from '../platform/maintenance.mjs';
+import {retentionCommand} from '../platform/retention.mjs';
+import {jobCommand} from '../platform/jobs.mjs';
+import {workbenchCommand} from '../platform/workbench.mjs';
+if(process.env.MOONRESTORE_INTERNAL!=='1'&&process.argv[2]==='--home'){
+  if(!process.argv[3])throw new Error('--home requires a private state directory');
+  process.env.MOONRESTORE_HOME=process.argv[3];process.argv.splice(2,2);
+}
+if(process.env.MOONRESTORE_INTERNAL!=='1') {
+  try {
+    const args=process.argv.slice(2);
+    const result=await advanced(args)??await retentionCommand(args)??await jobCommand(args)??await workbenchCommand(args);
+    if(result!==null){console.log(JSON.stringify(result));if(result.ok===false)process.exitCode=1;process.exit(process.exitCode||0);}
+  }catch(e){console.error(JSON.stringify({ok:false,error:e.message}));process.exit(1);}
+}
 const host = new Host();
 globalThis.__moonrestore_host = host;
 const built = new URL('../_build/js/release/build/cmd/main/main.js', import.meta.url);

@@ -2,7 +2,7 @@
 
 ///|
 /// A generated gear table avoids copied upstream code; format 1 fixes this seed.
-fn gear(byte : Byte) -> UInt {
+fn gear(byte : Byte) -> UInt32 {
   let mut x = byte.to_uint() + 0x9e3779b9U
   x = (x ^ (x >> 16)) * 0x85ebca6bU
   x = (x ^ (x >> 13)) * 0xc2b2ae35U
@@ -13,12 +13,12 @@ fn gear(byte : Byte) -> UInt {
 pub struct Chunker {
   config : ChunkConfig
   buffer : Array[Byte]
-  mut rolling : UInt
+  mut rolling : UInt32
 }
 
 ///|
 pub fn Chunker::new(
-  config? : ChunkConfig = ChunkConfig::default(),
+  config~ : ChunkConfig = ChunkConfig::default(),
 ) -> Chunker raise BackupError {
   config.validate()
   { config, buffer: [], rolling: 0U, }
@@ -61,7 +61,7 @@ pub fn Chunker::finish(self : Chunker) -> Bytes? {
 ///|
 pub fn chunk(
   data : Bytes,
-  config? : ChunkConfig = ChunkConfig::default(),
+  config~ : ChunkConfig = ChunkConfig::default(),
 ) -> Array[Bytes] raise BackupError {
   let chunker = Chunker::new(config~)
   let out = chunker.push(data)

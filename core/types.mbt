@@ -7,11 +7,11 @@ pub(all) suberror BackupError {
 ///|
 /// All limits are enforced before allocation or publication where possible.
 pub(all) struct Limits {
-  max_files : Int
+  max_files : Int32
   max_file_bytes : Int64
   max_total_bytes : Int64
-  max_chunks : Int
-  max_manifest_bytes : Int
+  max_chunks : Int32
+  max_manifest_bytes : Int32
 } derive(Eq, Debug, ToJson, FromJson)
 
 ///|
@@ -22,6 +22,38 @@ pub fn Limits::default() -> Limits {
     max_total_bytes: 68719476736L,
     max_chunks: 1000000,
     max_manifest_bytes: 33554432,
+  }
+}
+
+///|
+pub fn Limits::large() -> Limits {
+  {
+    ..Limits::default(),
+    max_file_bytes: 68719476736L,
+    max_total_bytes: 1099511627776L,
+  }
+}
+
+///|
+pub fn Limits::validate_for_format(
+  self : Limits,
+  format : Int32,
+) -> Unit raise BackupError {
+  guard format == 1 || format == 3 else {
+    raise Invalid("unsupported data profile")
+  }
+  let hard = if format == 3 { Limits::large() } else { Limits::default() }
+  guard self.max_files >= 0 &&
+    self.max_files <= hard.max_files &&
+    self.max_file_bytes >= 0L &&
+    self.max_file_bytes <= hard.max_file_bytes &&
+    self.max_total_bytes >= 0L &&
+    self.max_total_bytes <= hard.max_total_bytes &&
+    self.max_chunks >= 0 &&
+    self.max_chunks <= hard.max_chunks &&
+    self.max_manifest_bytes > 0 &&
+    self.max_manifest_bytes <= hard.max_manifest_bytes else {
+    raise Invalid("invalid profile resource limits")
   }
 }
 
@@ -45,9 +77,9 @@ pub fn Limits::validate(self : Limits) -> Unit raise BackupError {
 
 ///|
 pub(all) struct ChunkConfig {
-  min_size : Int
-  average_size : Int
-  max_size : Int
+  min_size : Int32
+  average_size : Int32
+  max_size : Int32
 } derive(Eq, Debug, ToJson, FromJson)
 
 ///|
@@ -69,7 +101,7 @@ pub fn ChunkConfig::validate(self : ChunkConfig) -> Unit raise BackupError {
 ///|
 pub(all) struct ChunkRef {
   id : String
-  size : Int
+  size : Int32
 } derive(Eq, Debug, ToJson, FromJson)
 
 ///|
@@ -84,7 +116,7 @@ pub(all) struct Entry {
 
 ///|
 pub(all) struct Snapshot {
-  format : Int
+  format : Int32
   created : String
   label : String
   config : ChunkConfig

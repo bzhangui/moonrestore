@@ -6,6 +6,7 @@ import os from 'node:os';
 import { randomUUID } from 'node:crypto';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
+import {ENCRYPTED_MAGIC, ENVELOPE_OVERHEAD, createVault, unlockVault, storageId, seal, unseal} from './vault.mjs';
 
 function publishDirectory(source, target) {
   if (process.platform === 'win32') { fs.renameSync(source,target); return; }
@@ -81,11 +82,26 @@ function writeNew(p, bytes) {
 }
 
 export class Host {
-  constructor() {
+  constructor({environment=process.env,allowMaintenance=false}={}) {
     this.repo = null; this.held = false; this.source = null;
     this.sourceEntries = new Map(); this.sourceRootStat = null; this.reader = null; this.restore = null;
     this.bytes = new Uint8Array(); this.writes = 0;
+    this.vault = null; this.key = null;
+    this.environment=environment;this.allowMaintenance=allowMaintenance;
+    this.profile=1;
   }
+  storagePath(kind,id) {
+    idPath(id);const physical=storageId(this.key,kind,id);
+    return this.repoPath(kind==='object'?`objects/${physical.slice(0,2)}/${physical}`:`snapshots/${physical}.json`);
+  }
+  readStored(kind,id) {
+    const physical=storageId(this.key,kind,id),limit=kind==='object'?1048576:33554432;
+    const raw=readBounded(this.storagePath(kind,id),limit+(this.key?ENVELOPE_OVERHEAD:0));
+    if(!this.key)return raw;
+    const item=unseal(this.key,this.vault,kind,physical,raw);
+    if(item.id!==id)throw new Error('Encrypted identity mismatch');return item.bytes;
+  }
+  encodeStored(kind,id,bytes){return this.key?seal(this.key,this.vault,kind,id,bytes):bytes;}
   execute(op, text, bytes) {
     try { this.bytes = new Uint8Array(); return JSON.stringify({ok: true, value: this.operation(op, JSON.parse(text), bytes)}); }
     catch (e) { return JSON.stringify({ok: false, error: e.message}); }
@@ -120,15 +136,16 @@ export class Host {
       this.restore = null;
     }
     this.unlock();
+    this.key?.fill(0);this.key=null;
   }
   store(id, bytes) {
     this.requireLock(); idPath(id);
-    const final = this.repoPath(`objects/${id.slice(0,2)}/${id}`);
-    if (exists(final)) { this.bytes = readBounded(final, 1048576); return {created: false}; }
+    const final = this.storagePath('object',id);
+    if (exists(final)) { this.bytes = this.readStored('object',id); return {created: false}; }
     const parent = path.dirname(final);
     if (!exists(parent)) fs.mkdirSync(parent, {mode: 0o700});
     const temp = this.repoPath(`tmp/${randomUUID()}.part`);
-    writeNew(temp, bytes);
+    writeNew(temp, this.encodeStored('object',id,bytes));
     this.failpoint('object-written');
     fs.renameSync(temp, final); syncDir(parent);
     this.writes++;
@@ -181,23 +198,34 @@ export class Host {
   operation(op, a, bytes) {
     switch(op) {
       case 'init': {
+        const encrypted = this.environment.MOONRESTORE_INIT_ENCRYPTED === '1';
+        const large = this.environment.MOONRESTORE_INIT_LARGE === '1';
+        const createdVault = encrypted ? createVault(this.environment.MOONRESTORE_PASSWORD) : null;
         const p = checkedPath(a.path, false);
         if (exists(p)) throw new Error('Repository target must not exist');
         checkedPath(path.dirname(p));
         fs.mkdirSync(p, {mode: 0o700});
         for (const name of ['objects','snapshots','tmp']) fs.mkdirSync(path.join(p,name), {mode: 0o700});
-        writeNew(path.join(p,'moonrestore'), Buffer.from(MAGIC)); syncDir(p);
-        return {path: p, format: 1};
+        if(createdVault){writeNew(path.join(p,'encryption.json'),Buffer.from(JSON.stringify(createdVault.config)));createdVault.key.fill(0);}
+        writeNew(path.join(p,'repository-id'),Buffer.from(randomUUID()));
+        const magic=encrypted?ENCRYPTED_MAGIC:MAGIC;
+        writeNew(path.join(p,'moonrestore'), Buffer.from(large?magic.replace(/v[12]\n$/,'v3\n'):magic)); syncDir(p);
+        return {path: p, format: large?3:encrypted?2:1, encrypted};
       }
       case 'open': {
         this.repo = checkedPath(a.path);
-        if (readBounded(this.repoPath('moonrestore'), 128).toString('utf8') !== MAGIC) throw new Error('Not a MoonRestore repository');
+        const magic=readBounded(this.repoPath('moonrestore'), 128).toString('utf8');
+        this.profile=magic.endsWith('v3\n')?3:1;
+        if(magic===ENCRYPTED_MAGIC||magic===ENCRYPTED_MAGIC.replace('v2','v3')){this.vault=JSON.parse(readBounded(this.repoPath('encryption.json'),4096));this.key=unlockVault(this.vault,this.environment);}
+        else if(magic!==MAGIC&&magic!==MAGIC.replace('v1','v3'))throw new Error('Not a MoonRestore repository');
         for (const name of ['objects','snapshots','tmp']) if (!fs.lstatSync(this.repoPath(name)).isDirectory()) throw new Error('Invalid repository layout');
+        if(exists(this.repoPath('.maintenance.json'))&&!this.allowMaintenance)throw new Error('Interrupted maintenance; run maintenance-recover before any other operation');
         return null;
       }
       case 'lock': this.lock(); return null;
       case 'unlock': this.unlock(); return null;
       case 'clock': return new Date().toISOString();
+      case 'profile': return this.profile;
       case 'walk': this.requireLock(); return this.walk(a.source, a.excludes, a.limits);
       case 'open_source': {
         this.requireLock(); if (this.reader) throw new Error('Source already open');
@@ -232,25 +260,26 @@ export class Host {
         return null;
       }
       case 'put': return this.store(a.id, bytes);
-      case 'get': this.requireLock(); this.bytes = readBounded(this.repoPath(`objects/${idPath(a.id).slice(0,2)}/${a.id}`), 1048576); return this.bytes.length;
+      case 'get': this.requireLock(); this.bytes = this.readStored('object',a.id); return this.bytes.length;
       case 'commit': {
         this.requireLock(); idPath(a.id);
         if (bytes.length > 33554432) throw new Error('Manifest too large');
-        const final = this.repoPath(`snapshots/${a.id}.json`);
+        const final = this.storagePath('manifest',a.id);
         if (exists(final)) throw new Error('Snapshot already exists');
         const temp = this.repoPath(`tmp/${randomUUID()}.manifest`);
-        writeNew(temp, bytes); this.failpoint('manifest-written');
+        writeNew(temp, this.encodeStored('manifest',a.id,bytes)); this.failpoint('manifest-written');
         fs.renameSync(temp, final); syncDir(path.dirname(final));
         return null;
       }
-      case 'manifest': this.requireLock(); this.bytes = readBounded(this.repoPath(`snapshots/${idPath(a.id)}.json`), 33554432); return this.bytes.length;
+      case 'manifest': this.requireLock(); this.bytes = this.readStored('manifest',a.id); return this.bytes.length;
       case 'list': {
         this.requireLock(); const ids = [];
         const dir = fs.opendirSync(this.repoPath('snapshots'));
         try { for (let d = dir.readSync(); d !== null; d = dir.readSync()) {
           if (!/^[a-f0-9]{64}\.json$/.test(d.name)) throw new Error('Unexpected snapshot file');
           if (ids.length >= 100000) throw new Error('Snapshot count limit exceeded');
-          ids.push(d.name.slice(0,-5));
+          if(this.key){const raw=readBounded(this.repoPath('snapshots/'+d.name),33554432+ENVELOPE_OVERHEAD);ids.push(unseal(this.key,this.vault,'manifest',d.name.slice(0,-5),raw).id);}
+          else ids.push(d.name.slice(0,-5));
         } } finally { dir.closeSync(); }
         return ids.sort();
       }
@@ -266,9 +295,10 @@ export class Host {
             idPath(file.name);
             if(!file.name.startsWith(shard.name)) throw new Error('Object in incorrect shard');
             const s=fs.lstatSync(checkedPath(path.join(p,file.name)));
-            if(!s.isFile()||s.nlink!==1||s.size>1048576) throw new Error('Invalid object file');
+            if(!s.isFile()||s.nlink!==1||s.size>1048576+(this.key?ENVELOPE_OVERHEAD:0)) throw new Error('Invalid object file');
             if(out.length>=1000000) throw new Error('Object inventory limit exceeded');
-            out.push({id:file.name,size:s.size});
+            if(this.key){const item=unseal(this.key,this.vault,'object',file.name,readBounded(path.join(p,file.name),1048576+ENVELOPE_OVERHEAD));out.push({id:item.id,size:item.bytes.length});}
+            else out.push({id:file.name,size:s.size});
           }} finally {files.closeSync();}
         }} finally {shards.closeSync();}
         return out;

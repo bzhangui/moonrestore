@@ -8,7 +8,7 @@ extern "js" fn returned_bytes() -> Bytes =
 
 ///|
 /// Convert OS failures into normal MoonBit errors; FFI exceptions never escape.
-fn io(op : String, args : Json, data? : Bytes = b"") -> Json raise {
+fn io(op : String, args : Json, data~ : Bytes = b"") -> Json raise {
   let reply = @json.parse(invoke(op, args.stringify(), data))
   match reply {
     { "ok": true, "value": value, .. } => value
@@ -19,7 +19,7 @@ fn io(op : String, args : Json, data? : Bytes = b"") -> Json raise {
 }
 
 ///|
-fn io_unit(op : String, args : Json, data? : Bytes = b"") -> Unit raise {
+fn io_unit(op : String, args : Json, data~ : Bytes = b"") -> Unit raise {
   ignore(io(op, args, data~))
 }
 
@@ -43,7 +43,16 @@ fn read_snapshot(id : String) -> @core.Snapshot raise {
   guard @core.digest(bytes) == id else {
     raise @core.Invalid("manifest SHA-256 mismatch")
   }
-  @core.decode_snapshot(@utf8.decode(bytes), id)
+  let profile : Int32 = @json.from_json(io("profile", Json::null()))
+  @core.decode_snapshot(
+    @utf8.decode(bytes),
+    id,
+    limits=if profile == 3 {
+      @core.Limits::large()
+    } else {
+      @core.Limits::default()
+    },
+  )
 }
 
 ///|

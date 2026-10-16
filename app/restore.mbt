@@ -1,5 +1,9 @@
 ///|
-fn verify_entry(entry : @core.Entry, restore : Bool) -> Unit raise {
+fn verify_entry(
+  entry : @core.Entry,
+  restore : Bool,
+  cache~ : Map[String, Bytes] = Map([]),
+) -> Unit raise {
   if entry.kind == "dir" {
     if restore {
       io_unit("restore_dir", { "path": entry.path })
@@ -12,7 +16,20 @@ fn verify_entry(entry : @core.Entry, restore : Bool) -> Unit raise {
   let hash = @core.Hasher::new()
   let mut size = 0L
   for part in entry.chunks {
-    let bytes = get_object(part) catch {
+    let bytes = try {
+      if cache.get(part.id) is Some(value) {
+        @core.verify_chunk(part, value)
+        value
+      } else {
+        let value = get_object(part)
+        // Fixed 16-object budget (at most 16 MiB). Never trust mtime or persist
+        // verification decisions between commands. File hashes are still checked.
+        if cache.length() < 16 {
+          cache[part.id] = value
+        }
+        value
+      }
+    } catch {
       e => raise @core.Invalid("\{entry.path}: \{e}")
     }
     hash.update(bytes)
@@ -35,19 +52,15 @@ pub fn verify(id : String) -> Json raise {
   let snapshot = read_snapshot(id)
   let mut bytes = 0L
   let mut files = 0
+  let cache : Map[String, Bytes] = Map([])
   for entry in snapshot.entries {
-    verify_entry(entry, false)
+    verify_entry(entry, false, cache~)
     if entry.kind == "file" {
       files += 1
       bytes += entry.size
     }
   }
-  {
-    "ok": true,
-    "snapshot": id,
-    "files": files,
-    "verified_bytes": bytes.to_json(),
-  }
+  { "ok": true, "snapshot": id, "files": files, "verified_bytes": Json(bytes) }
 }
 
 ///| Full verification happens before any target staging. Selected restores still
@@ -97,14 +110,14 @@ pub fn list_snapshots() -> Json raise {
       "created": s.created,
       "label": s.label,
       "entries": s.entries.length(),
-      "logical_bytes": bytes.to_json(),
+      "logical_bytes": Json(bytes),
     })
   }
-  { "ok": true, "snapshots": out.to_json() }
+  { "ok": true, "snapshots": Json(out) }
 }
 
 ///|
 pub fn compare_snapshots(before : String, after : String) -> Json raise {
   let changes = @core.diff(read_snapshot(before), read_snapshot(after))
-  { "ok": true, "changes": changes.to_json() }
+  { "ok": true, "changes": Json(changes) }
 }

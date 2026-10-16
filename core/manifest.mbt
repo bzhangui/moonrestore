@@ -53,10 +53,19 @@ pub fn validate_path(path : String) -> Unit raise BackupError {
 ///|
 pub fn Snapshot::validate(
   self : Snapshot,
-  limits? : Limits = Limits::default(),
+  limits~ : Limits = Limits::default(),
 ) -> Unit raise BackupError {
-  limits.validate()
-  guard self.format == 1 else { raise Invalid("unsupported snapshot format") }
+  guard self.format == 1 || self.format == 3 else {
+    raise Invalid("unsupported snapshot format")
+  }
+  limits.validate_for_format(3)
+  let hard = if self.format == 3 { Limits::large() } else { Limits::default() }
+  let limits : Limits = {
+    ..limits,
+    max_file_bytes: limits.max_file_bytes.min(hard.max_file_bytes),
+    max_total_bytes: limits.max_total_bytes.min(hard.max_total_bytes),
+  }
+  limits.validate_for_format(self.format)
   self.config.validate()
   guard self.label.length() <= 200 &&
     self.created.length() <= 80 &&
@@ -129,7 +138,7 @@ pub fn Snapshot::validate(
 ///|
 pub fn Snapshot::encode(
   self : Snapshot,
-  limits? : Limits = Limits::default(),
+  limits~ : Limits = Limits::default(),
 ) -> String raise BackupError {
   self.validate(limits~)
   let mut minimum_bytes = 0L
@@ -153,9 +162,9 @@ pub fn Snapshot::encode(
 pub fn decode_snapshot(
   text : String,
   expected_id : String,
-  limits? : Limits = Limits::default(),
+  limits~ : Limits = Limits::default(),
 ) -> Snapshot raise {
-  limits.validate()
+  limits.validate_for_format(3)
   guard text.length() <= limits.max_manifest_bytes else {
     raise Invalid("manifest byte limit exceeded")
   }
@@ -176,7 +185,7 @@ pub fn decode_snapshot(
 
 ///|
 /// Core Int decoding truncates fractions; format 1 instead requires exact integers.
-fn exact_int(value : Json, max : Int) -> Unit raise BackupError {
+fn exact_int(value : Json, max : Int32) -> Unit raise BackupError {
   guard value is Number(n, ..) &&
     n >= 0.0 &&
     n <= max.to_double() &&
@@ -191,7 +200,7 @@ fn check_integer_fields(json : Json) -> Unit raise BackupError {
     is { "format": format, "config": cfg, "entries": Array(entries), .. } else {
     raise Invalid("invalid snapshot structure")
   }
-  exact_int(format, 1)
+  exact_int(format, 3)
   guard cfg is { "min_size": min, "average_size": avg, "max_size": max, .. } else {
     raise Invalid("invalid chunk configuration structure")
   }
@@ -294,7 +303,7 @@ pub fn diff(
 
 ///|
 /// Lexicographic order independent of the core String length-first ordering.
-pub fn path_order(a : String, b : String) -> Int {
+pub fn path_order(a : String, b : String) -> Int32 {
   for i = 0; i < a.length().min(b.length()); i = i + 1 {
     if a[i] < b[i] {
       return -1

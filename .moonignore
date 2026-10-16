@@ -1,0 +1,14 @@
+/_build/
+/.local/
+/.mooncakes/
+/node_modules/
+/coverage/
+/target/
+*申报书*.md
+.env*
+*.log
+*.sqlite*
+*.dump
+*.backup
+*.dpapi
+*recovery-key*.json

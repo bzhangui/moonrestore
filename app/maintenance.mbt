@@ -2,7 +2,7 @@
 /// Reports catalog/storage utilization. Does not pretend to perform deep integrity checks.
 pub fn status() -> Json raise {
   let ids : Array[String] = @json.from_json(io("list", Json::null()))
-  let reachable : Map[String, Int] = Map([])
+  let reachable : Map[String, Int32] = Map([])
   let mut logical = 0L
   for id in ids {
     let snapshot = read_snapshot(id)
@@ -21,7 +21,7 @@ pub fn status() -> Json raise {
   let inventory : Array[@core.ChunkRef] = @json.from_json(
     io("inventory", Json::null()),
   )
-  let present : Map[String, Int] = Map([])
+  let present : Map[String, Int32] = Map([])
   let orphaned : Array[String] = []
   let mut stored = 0L
   let mut orphan_bytes = 0L
@@ -44,12 +44,12 @@ pub fn status() -> Json raise {
   {
     "ok": missing.is_empty(),
     "snapshots": ids.length(),
-    "logical_bytes_all_snapshots": logical.to_json(),
-    "stored_object_bytes": stored.to_json(),
+    "logical_bytes_all_snapshots": Json(logical),
+    "stored_object_bytes": Json(stored),
     "unique_referenced_objects": reachable.length(),
-    "unreferenced_objects": orphaned.to_json(),
-    "unreferenced_bytes": orphan_bytes.to_json(),
-    "missing_or_wrong_size_objects": missing.to_json(),
+    "unreferenced_objects": Json(orphaned),
+    "unreferenced_bytes": Json(orphan_bytes),
+    "missing_or_wrong_size_objects": Json(missing),
     "integrity_verified": false,
     "note": "Run verify all for complete SHA-256/file verification. Nothing is deleted.",
   }
@@ -58,16 +58,21 @@ pub fn status() -> Json raise {
 ///|
 /// A no-payload-write preflight; useful for exclusions, unsafe paths and size budgets.
 pub fn plan_backup(source : String, excludes : Array[String]) -> Json raise {
-  let limits = @core.Limits::default()
+  let format : Int32 = @json.from_json(io("profile", Json::null()))
+  let limits = if format == 3 {
+    @core.Limits::large()
+  } else {
+    @core.Limits::default()
+  }
   let entries : Array[SourceEntry] = @json.from_json(
     io("walk", {
       "source": source,
-      "excludes": excludes.to_json(),
+      "excludes": Json(excludes),
       "limits": limits.to_json(),
     }),
   )
   let model : @core.Snapshot = {
-    format: 1,
+    format,
     label: "",
     created: "",
     config: @core.ChunkConfig::default(),
@@ -85,14 +90,14 @@ pub fn plan_backup(source : String, excludes : Array[String]) -> Json raise {
       }
     }),
   }
-  model.validate()
+  model.validate(limits~)
   let bytes = entries.fold(init=0L, fn(total, e) { total + e.size })
   {
     "ok": true,
     "entries": entries.length(),
-    "logical_bytes": bytes.to_json(),
+    "logical_bytes": Json(bytes),
     "payload_written": false,
-    "exclusions": excludes.to_json(),
+    "exclusions": Json(excludes),
     "limits": limits.to_json(),
   }
 }

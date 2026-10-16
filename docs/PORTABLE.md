@@ -1,4 +1,4 @@
-# MoonRestore 0.1.0 便携运行包
+# MoonRestore 0.2.0 便携运行包
 
 这是当前平台的已构建命令行程序，仍需安装 Node.js 22 或以上，不包含 Node 运行时。无需安装 MoonBit 或运行 npm install。不要把它称为无需任何依赖的 Windows EXE。
 
@@ -14,4 +14,6 @@ node examples/scenarios.mjs
 
 此包只适用于其 manifest.json 所列的平台与架构，不要将 Linux/macOS 辅助程序复制到其他平台运行。`manifest.json` 记录包内文件的 SHA-256，源码项目中的 `scripts/verify-package.mjs` 可复核。
 
-这些哈希用于损坏检测，不是签名认证。来源和快照 ID 都应从可信渠道取得。仓库数据不加密；同盘备份不是硬盘故障保护。
+也可运行 `node bin/moonrestore.mjs workbench` 启动仅本机的工作台；新任务、报告与密钥封装写入包内 `.local/state/`，不要将已使用的包目录重新公开分发。打包清单不包含这些运行数据。
+
+这些哈希用于损坏检测，不是签名认证。来源和快照 ID 都应从可信渠道取得。默认仓库仍是明文，需显式初始化加密仓库；同盘备份不是硬盘故障保护。新能力与安全边界见 `docs/WORKBENCH.md`、`docs/RECOVERY.md`。
