@@ -1,8 +1,31 @@
 # 发布核验记录
 
-## 0.2.0 本轮状态
+## 0.2.0 正式发布（2026-10-16）
 
-2026-10-16 已获用户授权：本轮测试通过后推送 bzhangui/moonrestore main，并发布 Mooncakes 0.2.0。当前此节仍为待核验状态，不以代码版本号、ZIP 或 dry-run 代替正式发布。完成后补实际提交、CI、注册表校验和及独立消费者结果。
+已获用户明确授权后执行。本轮没有推送私人申报书、个人资料、备份、恢复密钥、SDK、浏览器会话链接和运行报告，也没有改动 HookLab 等其他项目。
+
+- GitHub：[bzhangui/moonrestore](https://github.com/bzhangui/moonrestore)，Public、main。
+- 功能与测试源码提交：`a4b60a9345bc75f3b1d19ef955b91e831d620e0d`，提交后已核对远端 SHA 一致。
+- 对应 [CI 38866239121](https://github.com/bzhangui/moonrestore/actions/runs/38866239121) 的 Windows、Ubuntu、macOS 全部成功。三平台实际使用 moonc 0.10.15+943464bfa、Node 22，执行四目标检查/构建/核心测试/示例、Node 回归、覆盖率和便携包功能冒烟。
+- Windows：50 个 Node 测试通过、无跳过；Linux/macOS：各 47 个通过，仅 3 项 Windows 启动器/DPAPI 测试明确跳过。三平台核心覆盖率 319/345；运行包 Windows 27 文件、Unix 28 文件（含 C 排他提交辅助程序）校验通过，包内加密备份/报告/恢复回读通过。
+- Mooncakes：`bzhangui/moonrestore@0.2.0` 正式发布返回 `200 OK`；随后 `moon view` 查询成功、未撤回、latest_version 为 0.2.0。发布时间为 2026-10-16 15:19:09（UTC+8）。许可证 Apache-2.0，依赖 moonbitlang/x 0.5.5。
+- 注册表与本地发布 ZIP 的 SHA-256 一致：
+
+```text
+e823960c8069950c703c6b26188ae1136de89ed6562fef98238f3b6f36ee0c64
+```
+
+- 独立项目实际运行 `moon add bzhangui/moonrestore@0.2.0`，无本地 path/workspace 替换；四目标均通过检查、构建、可执行断言及 2 个公开 API 消费测试（共 8 次测试执行）。覆盖 SHA-256 标准向量、分块验证、清单往返、保留策略、容量与源变化门禁、大文件 profile 的公开接口。复现入口：`node scripts/verify-registry.mjs 0.2.0`。
+- 发布临时使用已有登录文件的私有副本，完成后已删除；原登录文件未修改、内容未输出。后续文档证据提交不覆盖注册表已发布版本。
+
+复核命令：
+
+```sh
+moon view bzhangui/moonrestore@0.2.0 --json
+node scripts/verify-registry.mjs 0.2.0
+```
+
+此次 SDK 的 `publish --frozen` 会使新解包目录无法安装依赖；采用常规 `moon publish`，重新下载 moon.mod 中固定的依赖并通过解包检查。dry-run 的服务端 `202 Accepted` 曾被 CLI 显示为非零退出，因此未把 dry-run 当成正式发布；以上以正式 `200 OK`、注册表元数据、校验和和独立消费结果为准。
 
 ## 0.1.0 历史发布核验记录
 

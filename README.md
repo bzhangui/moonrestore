@@ -2,9 +2,9 @@
 
 ## 0.2.0：从备份到实际恢复验证
 
-本地源码已进入 0.2.0：新增私有 JSON/离线 HTML 校验报告、隔离恢复演练与恢复后读回、容量预检查、任务与异常变化门禁、本机工作台、标准认证加密、独立仓库复制、保留预览及隔离回收。默认仍不上传数据、不启动公网服务、不自动删除历史。
+0.2.0 已发布：新增私有 JSON/离线 HTML 校验报告、隔离恢复演练与恢复后读回、容量预检查、任务与异常变化门禁、本机工作台、标准认证加密、独立仓库复制、保留预览及隔离回收。默认仍不上传数据、不启动公网服务、不自动删除历史。
 
-当前版本的远端 CI、Mooncakes 与测试状态见 [维护报告](docs/QUALITY_REPORT.md) 和 [发布记录](docs/PUBLICATION.md)。下方 0.1.0 的发布/CI 链接是历史证据，不能代替 0.2.0 的发布状态。
+本轮源码已通过 [Windows/Ubuntu/macOS CI](https://github.com/bzhangui/moonrestore/actions/runs/38866239121)，Mooncakes 0.2.0 已从独立项目下载并通过四目标消费验证。详细范围、校验和与尚未完成的真实环境验证见 [维护报告](docs/QUALITY_REPORT.md) 和 [发布记录](docs/PUBLICATION.md)。
 
 ```sh
 npm run build
@@ -42,7 +42,7 @@ node scripts/package.mjs
 
 基于 MoonBit 的可验证增量备份工具。备份后能校验完整内容，并恢复指定历史版本。适合论文、代码、实验数据和团队文件资产；独立于 HookLab 与 MoonMQTT。
 
-[公开源码](https://github.com/bzhangui/moonrestore) · [Mooncakes 0.1.0](https://mooncakes.io/docs/bzhangui/moonrestore) · [持续集成](https://github.com/bzhangui/moonrestore/actions) · [发布核验记录](docs/PUBLICATION.md)
+[公开源码](https://github.com/bzhangui/moonrestore) · [Mooncakes 0.2.0](https://mooncakes.io/docs/bzhangui/moonrestore) · [持续集成](https://github.com/bzhangui/moonrestore/actions) · [发布核验记录](docs/PUBLICATION.md)
 
 ## 已实现
 
@@ -120,7 +120,7 @@ moon run examples/core --target wasm
 已发布到 Mooncakes。在你的 MoonBit 项目中执行：
 
 ```sh
-moon add bzhangui/moonrestore@0.1.0
+moon add bzhangui/moonrestore@0.2.0
 ```
 
 对应包的 `moon.pkg` 中添加 `"bzhangui/moonrestore/core" @backup` 导入，参考下面的核心库示例。发布后已从注册表下载到独立项目并验证四目标检查、运行和测试；不是只验证本仓库的相对导入。

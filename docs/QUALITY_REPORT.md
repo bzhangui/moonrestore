@@ -38,7 +38,7 @@ Windows x64；moon 0.1.20261012、moonc 0.10.15+943464bfa，Node v24.15.0。使�
 
 ### 远端及未完成范围
 
-本地通过不等于远端通过；本轮源码提交、三平台 CI、注册表包校验和与独立消费者的最终记录集中在 [PUBLICATION](PUBLICATION.md)。
+本轮源码提交 `a4b60a9` 的 [三平台 CI](https://github.com/bzhangui/moonrestore/actions/runs/38866239121) 已全部通过。Windows Node 回归 50 项通过；Linux/macOS 各 47 项通过，3 项 Windows 专项跳过；三平台核心覆盖率均为 319/345。Mooncakes 0.2.0 已正式发布，独立消费者四目标各 2 个测试通过。完整包校验和与发布记录集中在 [PUBLICATION](PUBLICATION.md)。
 
 真实独立介质、第二主机、NAS、断电、长期生产负载与外部用户仍未验证。同一机器的复制目录、合成用户和进程/磁盘故障注入不能替代这些证据。工作台/任务每个核心子进程有 10 分钟编排时限；直接核心 CLI 可用于经测量后更长的单步任务。源码实现与受控测试完成，不据此宣称生产可靠性已全部验收。
 
