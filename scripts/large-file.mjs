@@ -112,7 +112,7 @@ try {
   if (actual !== expected) throw new Error("Large restored file differs");
   const report = {
     format: 1,
-    version: "0.3.0",
+    version: "0.3.1",
     kind: "large_file_regression",
     ok: true,
     bytes: String(size),

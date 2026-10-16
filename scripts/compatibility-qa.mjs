@@ -99,7 +99,7 @@ try {
     });
   }
   const report = {
-    version: "0.3.0",
+    version: "0.3.1",
     kind: "compatibility_and_codec_evaluation",
     ok: true,
     actual_baseline: "0.2.0",

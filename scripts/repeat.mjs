@@ -64,7 +64,7 @@ try {
   }
   const report = {
     format: 1,
-    version: "0.3.0",
+    version: "0.3.1",
     kind: "controlled_repeatability",
     ok: true,
     rounds,

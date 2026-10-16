@@ -1,4 +1,6 @@
-# MoonRestore 0.3.0 运行包
+# MoonRestore 0.3.x 运行包
+
+具体版本以 manifest.json 为准。0.3.1 是 GitHub 中文提醒源码补丁，尚未发布 Mooncakes，不应把本地运行包当作注册表正式发布。
 
 普通便携包需外部 Node.js ≥22。若包含 `MoonRestore.exe` 和 `runtime/node.exe`，则为内置运行时的 Windows x64 桌面包，可双击 EXE，无需全局 Node/MoonBit，仍需 Windows .NET Framework 4.x。安装与回退见 `docs/DESKTOP.md`。两种包均无需运行 npm install，EXE 尚未代码签名。
 

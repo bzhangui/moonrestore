@@ -3,11 +3,19 @@ import fs from "node:fs";
 import path from "node:path";
 import { spawn } from "node:child_process";
 import { checked } from "./vault.mjs";
+// Windows PowerShell otherwise decodes redirected stdin using the active OEM
+// codepage. JSON data remains data; no user strings are interpolated into code.
+export function utf8JsonScript(script) {
+  return (
+    "[Console]::InputEncoding=[Text.UTF8Encoding]::new($false); [Console]::OutputEncoding=[Text.UTF8Encoding]::new($false); " +
+    script
+  );
+}
 function powershell(script, input, { timeout = 30000 } = {}) {
   return new Promise((resolve, reject) => {
     const child = spawn(
       "powershell.exe",
-      ["-NoProfile", "-STA", "-Command", script],
+      ["-NoProfile", "-STA", "-Command", utf8JsonScript(script)],
       { windowsHide: true, shell: false, stdio: ["pipe", "pipe", "pipe"] },
     );
     let output = "",

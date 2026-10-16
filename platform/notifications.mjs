@@ -9,6 +9,7 @@ import {
   stateHome,
 } from "./vault.mjs";
 import { randomUUID } from "node:crypto";
+import { utf8JsonScript } from "./system.mjs";
 export function notices() {
   const file = path.join(stateHome(), "notices.json");
   if (!fs.existsSync(file)) return [];
@@ -48,7 +49,7 @@ export function notify(job, code, { desktop = false } = {}) {
       "Add-Type -AssemblyName System.Windows.Forms; Add-Type -AssemblyName System.Drawing; $v=[Console]::In.ReadToEnd()|ConvertFrom-Json; $n=New-Object System.Windows.Forms.NotifyIcon; $n.Icon=[Drawing.SystemIcons]::Information; $n.Visible=$true; $n.ShowBalloonTip(2500,'MoonRestore',$v.message,[Windows.Forms.ToolTipIcon]::Info); Start-Sleep -Seconds 3; $n.Dispose()";
     const child = spawn(
       "powershell.exe",
-      ["-NoProfile", "-NonInteractive", "-Command", script],
+      ["-NoProfile", "-NonInteractive", "-Command", utf8JsonScript(script)],
       { windowsHide: true, stdio: ["pipe", "ignore", "ignore"], shell: false },
     );
     child.on("error", () => {});

@@ -21,6 +21,37 @@ import {
 } from "../platform/explorer.mjs";
 import { startWorkbench } from "../platform/workbench.mjs";
 import http from "node:http";
+import { spawnSync } from "node:child_process";
+import { utf8JsonScript } from "../platform/system.mjs";
+
+test(
+  "Windows JSON transport preserves Chinese and never evaluates data as PowerShell",
+  { skip: process.platform !== "win32" },
+  () => {
+    const message =
+      '受控备份完成：论文 ✓ 中文路径/引号" 和 $(Write-Output unexpected)';
+    const result = spawnSync(
+      "powershell.exe",
+      [
+        "-NoProfile",
+        "-NonInteractive",
+        "-Command",
+        utf8JsonScript(
+          "$v=[Console]::In.ReadToEnd()|ConvertFrom-Json; [Console]::Write($v.message)",
+        ),
+      ],
+      {
+        input: JSON.stringify({ message }),
+        encoding: "utf8",
+        windowsHide: true,
+        shell: false,
+        timeout: 15000,
+      },
+    );
+    assert.equal(result.status, 0);
+    assert.equal(result.stdout, message);
+  },
+);
 async function owned(work) {
   const f = fixture(),
     previous = process.env.MOONRESTORE_HOME;

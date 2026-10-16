@@ -64,7 +64,7 @@ pub fn run(args : Array[String]) -> Unit raise {
     return
   }
   if args[0] == "version" {
-    println("MoonRestore 0.3.0")
+    println("MoonRestore 0.3.1")
     return
   }
   if args[0] == "capacity-state" {
