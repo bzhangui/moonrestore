@@ -6,7 +6,9 @@
 
 Windows x64 可本地生成**内置 Node 运行时**的桌面包，双击原生启动器，支持托盘与当前用户安装，不需要全局 Node/MoonBit。需 Windows .NET Framework 4.x；EXE 尚未代码签名。源码构建执行 `npm run package:desktop`，安装、私有状态位置与回退见 [桌面包指南](docs/DESKTOP.md)。本仓库不包含运行时二进制或私人运行包，也没有擅自发布 GitHub Release 附件。
 
-本轮测试和发布证据见 [维护报告](docs/QUALITY_REPORT.md)、[九项验收](docs/ACCEPTANCE.md) 与 [发布记录](docs/PUBLICATION.md)。以下 0.2.0 记录保留为历史，不应替代 0.3.0 证据。VSS 仅只读准备检查；压缩仅完成原型评估，均不能当作已支持的存储能力。真实外部用户、独立介质/NAS、跨主机、断电和长期生产仍未验证。
+0.3.0 已正式发布到 [Mooncakes](https://mooncakes.io/docs/bzhangui/moonrestore)，[Windows/Ubuntu/macOS CI](https://github.com/bzhangui/moonrestore/actions/runs/38887889049) 全部通过；独立消费者四目标检查/构建/运行及测试通过。本机 63 项 Node 回归、22 项核心用例 × 四目标、实际 >2 GiB 恢复读回、真实浏览器及旧版兼容均通过。完整证据见 [维护报告](docs/QUALITY_REPORT.md)、[九项验收](docs/ACCEPTANCE.md) 与 [发布记录](docs/PUBLICATION.md)。
+
+以下 0.2.0 记录保留为历史。VSS 仅只读准备检查；压缩仅完成原型评估，均不能当作已支持的存储能力。原生窗口人工检查、真实外部用户、独立介质/NAS、跨主机、断电和长期生产仍未验证。
 
 ## 0.2.0：从备份到实际恢复验证
 
@@ -50,7 +52,7 @@ node scripts/package.mjs
 
 基于 MoonBit 的可验证增量备份工具。备份后能校验完整内容，并恢复指定历史版本。适合论文、代码、实验数据和团队文件资产；独立于 HookLab 与 MoonMQTT。
 
-[公开源码](https://github.com/bzhangui/moonrestore) · [Mooncakes 0.2.0](https://mooncakes.io/docs/bzhangui/moonrestore) · [持续集成](https://github.com/bzhangui/moonrestore/actions) · [发布核验记录](docs/PUBLICATION.md)
+[公开源码](https://github.com/bzhangui/moonrestore) · [Mooncakes 0.3.0](https://mooncakes.io/docs/bzhangui/moonrestore) · [持续集成](https://github.com/bzhangui/moonrestore/actions) · [发布核验记录](docs/PUBLICATION.md)
 
 ## 已实现
 
@@ -63,7 +65,7 @@ node scripts/package.mjs
 
 ## 安装与运行
 
-0.2.0 源码构建需要 [MoonBit](https://www.moonbitlang.com/download/)（moonc ≥ 0.10.15）、[Node.js](https://nodejs.org/) ≥ 22。构建脚本优先使用可选的 `.local/toolchain`，否则使用系统 SDK；可用 MOON_BIN/MOON_HOME 指定兼容环境。Linux/macOS 还需要系统 C 编译器，用于编译原子、不覆盖的目录提交辅助程序。Windows 不需要该辅助程序。
+0.3.0 源码构建需要 [MoonBit](https://www.moonbitlang.com/download/)（moonc ≥ 0.10.15）、[Node.js](https://nodejs.org/) ≥ 22。构建脚本优先使用可选的 `.local/toolchain`，否则使用系统 SDK；可用 MOON_BIN/MOON_HOME 指定兼容环境。Linux/macOS 还需要系统 C 编译器，用于编译原子、不覆盖的目录提交辅助程序。Windows 不需要该辅助程序。
 
 获取源码后在项目目录执行（公开仓库地址：`https://github.com/bzhangui/moonrestore`）：
 
@@ -128,7 +130,7 @@ moon run examples/core --target wasm
 已发布到 Mooncakes。在你的 MoonBit 项目中执行：
 
 ```sh
-moon add bzhangui/moonrestore@0.2.0
+moon add bzhangui/moonrestore@0.3.0
 ```
 
 对应包的 `moon.pkg` 中添加 `"bzhangui/moonrestore/core" @backup` 导入，参考下面的核心库示例。发布后已从注册表下载到独立项目并验证四目标检查、运行和测试；不是只验证本仓库的相对导入。

@@ -5,13 +5,13 @@
 | 标准 | 当前结果 |
 |---|---|
 | 1. MoonBit 主要实现 / 编译器 | 核心分块、SHA、清单、属性校验、选择范围、保留/容量及备份恢复编排在 MoonBit；Node/系统负责加密、I/O、GUI 和调度；最低 moonc 0.10.15，不宣称纯 MoonBit 全运行时 |
-| 2. 公开仓库 / 提交 | 延续公开 main，不伪造提交或修改历史；0.3 推送与 SHA 证据见 PUBLICATION |
+| 2. 公开仓库 / 提交 | 功能提交 60d6055 已推送公开 main，匿名 HTTP 200、远端 SHA 一致；不伪造提交或修改历史 |
 | 3. 源码与核心功能 | core/app/platform/ui 分层，补齐任务管理、检索、多选、密钥、取消、副本和桌面分发；受控端到端测试 |
 | 4. README 可复现 | 根 README、DESKTOP、WORKBENCH、PRACTICAL_0_3、FORMAT、RECOVERY 覆盖安装/使用/升级回退及安全边界 |
-| 5. CI | 三平台检查/构建/四目标测试、覆盖率、隐私、运行包冒烟；Windows 增加原生启动器编译。当前执行证据见 PUBLICATION |
+| 5. CI | [三平台 CI 38887889049](https://github.com/bzhangui/moonrestore/actions/runs/38887889049) 检查/构建/四目标测试、覆盖率、隐私、运行包冒烟全部通过；Windows 原生启动器编译通过 |
 | 6. 示例 | 可运行 demo、四目标核心样例、三种受控应用场景均保留 |
 | 7. 测试 | 本轮 22 核心用例 × 四目标；Node 专项、重复恢复、实际 >2 GiB、旧版双向兼容、真实浏览器及桌面非交互验证；不替代真实生产证据 |
-| 8. Mooncakes | 0.2 已发布；0.3 以 PUBLICATION 中正式响应、元数据/哈希和独立消费验证为准，不把预打包当正式发布 |
+| 8. Mooncakes | 0.3.0 已正式发布，200 OK、未撤回、包哈希一致，独立消费四目标各 2 测试通过，见 PUBLICATION |
 | 9. OSI / 来源 | Apache-2.0、NOTICE 保留；可选内置 Node 必须附完整上游 LICENSE 与精确来源/哈希；系统 .NET 不随包分发 |
 
 验收材料工程补强不等于赛事最终通过。尚缺人工原生窗口检查、真正独立设备/NAS/跨主机/断电和长期外部用户证据；VSS 仅准备检查，压缩仅原型。详见 [QUALITY_REPORT](QUALITY_REPORT.md)。以下保留 0.2 历史证据。
