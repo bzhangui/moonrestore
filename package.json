@@ -1,6 +1,6 @@
 {
   "name": "moonrestore-local",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "private": true,
   "type": "module",
   "engines": {"node": ">=22"},
@@ -11,6 +11,8 @@
     "demo": "node examples/demo.mjs",
     "workbench": "node bin/moonrestore.mjs workbench",
     "test:repeat": "node scripts/repeat.mjs",
-    "test:large": "node scripts/large-file.mjs"
+    "test:large": "node scripts/large-file.mjs",
+    "package": "node scripts/package.mjs",
+    "package:desktop": "node scripts/package-desktop.mjs"
   }
 }

@@ -124,7 +124,10 @@ pub fn backup(
   let created : String = @json.from_json(io("clock", Json::null()))
   let snapshot : @core.Snapshot = { format, created, label, config, entries, }
   snapshot.validate(limits~)
-  let text = snapshot.encode(limits~)
+  let metadata : Array[@core.FileMetadata] = @json.from_json(
+    io("source_metadata", Json::null()),
+  )
+  let text = @core.encode_with_metadata(snapshot, metadata, limits~)
   let id = @core.text_digest(text)
   io_unit("commit", { "id": id }, data=@utf8.encode(text))
   {

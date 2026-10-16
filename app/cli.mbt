@@ -1,7 +1,7 @@
 ///|
 fn help() -> String {
   let text =
-    #|MoonRestore 0.2 — verifiable incremental backups
+    #|MoonRestore 0.3 — verifiable incremental backups
     #|Usage: node bin/moonrestore.mjs <command> ...
     #|  init <repository>                       Create a NEW repository
     #|  backup <repository> <source>             Backup a directory tree
@@ -12,7 +12,7 @@ fn help() -> String {
     #|  status <repository>                     Storage and orphan inventory (no deletion)
     #|  verify <repository> <snapshot-id|all>    Full file/chunk verification
     #|  restore <repository> <id> <NEW-target>   No overwrite; full pre-verification
-    #|    --prefix <relative>                   Restore one file/subtree
+    #|    --prefix <relative>                   Repeat to select up to 128 files/subtrees
     #|  diff <repository> <old-id> <new-id>      Added/modified/removed paths
     #|  recover <repository>                    Remove dead same-host lock/temp files
     #|  audit <repository> <id|all>              Structured full integrity diagnosis
@@ -64,7 +64,7 @@ pub fn run(args : Array[String]) -> Unit raise {
     return
   }
   if args[0] == "version" {
-    println("MoonRestore 0.2.0")
+    println("MoonRestore 0.3.0")
     return
   }
   if args[0] == "capacity-state" {
@@ -96,7 +96,13 @@ pub fn run(args : Array[String]) -> Unit raise {
   let command = args[0]
   let required = match command {
     "init" | "list" | "recover" | "status" => 2
-    "backup" | "verify" | "plan" | "audit" | "catalog" | "retention-plan" => 3
+    "backup"
+    | "verify"
+    | "plan"
+    | "audit"
+    | "catalog"
+    | "retention-plan"
+    | "selection-plan" => 3
     "restore" | "diff" => 4
     _ => raise @core.Invalid("unknown command; use help")
   }
@@ -105,6 +111,7 @@ pub fn run(args : Array[String]) -> Unit raise {
   }
   let mut label = ""
   let mut prefix = ""
+  let selections : Array[String] = []
   let excludes : Array[String] = []
   let mut minimum = 8192
   let mut average = 32768
@@ -121,7 +128,10 @@ pub fn run(args : Array[String]) -> Unit raise {
     }
     let key = args[i]
     let value = args[i + 1]
-    guard key == "--exclude" || key == "--protect" || !used.contains(key) else {
+    guard key == "--exclude" ||
+      key == "--protect" ||
+      key == "--prefix" ||
+      !used.contains(key) else {
       raise @core.Invalid("duplicate option")
     }
     used[key] = true
@@ -134,7 +144,11 @@ pub fn run(args : Array[String]) -> Unit raise {
       ("backup", "--min") => minimum = parse_size(value)
       ("backup", "--avg") => average = parse_size(value)
       ("backup", "--max") => maximum = parse_size(value)
-      ("restore", "--prefix") => prefix = value
+      ("restore", "--prefix") => {
+        prefix = value
+        selections.push(value)
+      }
+      ("selection-plan", "--prefix") => selections.push(value)
       ("retention-plan", "--daily") => daily = parse_size(value)
       ("retention-plan", "--weekly") => weekly = parse_size(value)
       ("retention-plan", "--monthly") => monthly = parse_size(value)
@@ -172,6 +186,7 @@ pub fn run(args : Array[String]) -> Unit raise {
     "status" => status()
     "audit" => audit_snapshots(args[2])
     "catalog" => read_snapshot(args[2]).to_json()
+    "selection-plan" => selection_plan(args[2], selections)
     "retention-plan" =>
       retention_plan(parse_size(args[2]), daily, weekly, monthly, protected_ids)
     "plan" => plan_backup(args[2], excludes)
@@ -186,7 +201,7 @@ pub fn run(args : Array[String]) -> Unit raise {
       } else {
         verify(args[2])
       }
-    "restore" => restore(args[2], args[3], prefix)
+    "restore" => restore(args[2], args[3], prefix, selections~)
     "diff" => compare_snapshots(args[2], args[3])
     _ => raise @core.Invalid("unreachable command")
   }

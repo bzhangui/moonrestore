@@ -44,7 +44,13 @@ fn read_snapshot(id : String) -> @core.Snapshot raise {
     raise @core.Invalid("manifest SHA-256 mismatch")
   }
   let profile : Int32 = @json.from_json(io("profile", Json::null()))
-  @core.decode_snapshot(
+  let limits = if profile == 3 {
+    @core.Limits::large()
+  } else {
+    @core.Limits::default()
+  }
+  let text = @utf8.decode(bytes)
+  let model = @core.decode_snapshot(
     @utf8.decode(bytes),
     id,
     limits=if profile == 3 {
@@ -53,6 +59,8 @@ fn read_snapshot(id : String) -> @core.Snapshot raise {
       @core.Limits::default()
     },
   )
+  io_unit("set_metadata", Json(@core.decode_metadata(text, id, limits~)))
+  model
 }
 
 ///|

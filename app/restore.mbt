@@ -15,6 +15,7 @@ fn verify_entry(
   }
   let hash = @core.Hasher::new()
   let mut size = 0L
+  let mut verified_parts = 0
   for part in entry.chunks {
     let bytes = try {
       if cache.get(part.id) is Some(value) {
@@ -34,6 +35,10 @@ fn verify_entry(
     }
     hash.update(bytes)
     size += bytes.length().to_int64()
+    verified_parts += 1
+    if verified_parts % 16 == 0 {
+      io_unit("verify_tick", { "bytes": Json(size) })
+    }
     if restore {
       io_unit("restore_write", Json::null(), data=bytes)
     }
@@ -41,6 +46,7 @@ fn verify_entry(
   guard size == entry.size && hash.finish() == entry.hash else {
     raise @core.Invalid("file integrity mismatch: \{entry.path}")
   }
+  io_unit("verified_file", { "bytes": Json(size) })
   if restore {
     io_unit("restore_close", Json::null())
   }
@@ -67,23 +73,24 @@ pub fn verify(id : String) -> Json raise {
 
 ///|
 /// verify the full snapshot so a green result never hides an unrelated corruption.
-pub fn restore(id : String, target : String, prefix : String) -> Json raise {
+pub fn restore(
+  id : String,
+  target : String,
+  prefix : String,
+  selections~ : Array[String] = [],
+) -> Json raise {
   let snapshot = read_snapshot(id)
-  if prefix != "" {
-    @core.validate_path(prefix)
-    guard snapshot.entries.any(fn(e) { e.path == prefix }) else {
-      raise @core.Invalid("restore selection not found")
+  let selected = if selections.is_empty() {
+    if prefix == "" {
+      []
+    } else {
+      [prefix]
     }
+  } else {
+    selections
   }
+  let chosen = @core.select_entries(snapshot, selected)
   ignore(verify(id))
-  let chosen = snapshot.entries.filter(fn(e) {
-    prefix == "" ||
-    e.path == prefix ||
-    e.path.has_prefix(prefix + "/") ||
-    (e.kind == "dir" && prefix.has_prefix(e.path + "/"))
-  })
-  // Parent-first independent of the untrusted manifest entry order.
-  chosen.sort_by(fn(a, b) { @core.path_order(a.path, b.path) })
   let staging = io("begin_restore", { "target": target })
   for entry in chosen {
     verify_entry(entry, true)

@@ -1,28 +1,66 @@
 // OS capabilities only. CDC, all content hashes, manifest rules, backup/restore
-// decisions and diffing live in MoonBit. No user credentials or external calls.
-import fs from 'node:fs';
-import path from 'node:path';
-import os from 'node:os';
-import { randomUUID } from 'node:crypto';
-import { spawnSync } from 'node:child_process';
-import { fileURLToPath } from 'node:url';
-import {ENCRYPTED_MAGIC, ENVELOPE_OVERHEAD, createVault, unlockVault, storageId, seal, unseal} from './vault.mjs';
+// decisions and diffing live in MoonBit. Ephemeral credentials stay in this OS
+// adapter; no network calls or credentials returned through the MoonBit protocol.
+import fs from "node:fs";
+import path from "node:path";
+import os from "node:os";
+import { randomUUID } from "node:crypto";
+import { spawnSync } from "node:child_process";
+import { fileURLToPath } from "node:url";
+import {
+  ENCRYPTED_MAGIC,
+  ENVELOPE_OVERHEAD,
+  createVault,
+  unlockVault,
+  storageId,
+  seal,
+  unseal,
+} from "./vault.mjs";
 
 function publishDirectory(source, target) {
-  if (process.platform === 'win32') { fs.renameSync(source,target); return; }
-  const helper = fileURLToPath(new URL('../_build/host/rename_noreplace',import.meta.url));
-  if (!exists(helper)) throw new Error('Exclusive rename helper missing; run npm run build');
-  const result = spawnSync(helper,[source,target],{encoding:'utf8',timeout:10000,shell:false});
-  if (result.error || result.status !== 0) throw new Error(result.error?.message || result.stderr.trim() || 'Exclusive rename failed');
+  if (process.platform === "win32") {
+    fs.renameSync(source, target);
+    return;
+  }
+  const helper = fileURLToPath(
+    new URL("../_build/host/rename_noreplace", import.meta.url),
+  );
+  if (!exists(helper))
+    throw new Error("Exclusive rename helper missing; run npm run build");
+  const result = spawnSync(helper, [source, target], {
+    encoding: "utf8",
+    timeout: 10000,
+    shell: false,
+  });
+  if (result.error || result.status !== 0)
+    throw new Error(
+      result.error?.message ||
+        result.stderr.trim() ||
+        "Exclusive rename failed",
+    );
 }
 
-const MAGIC = 'moonrestore-repository-v1\n';
-const exists = p => { try { fs.lstatSync(p); return true; } catch (e) { if (e.code === 'ENOENT') return false; throw e; } };
-const samePath = (a, b) => process.platform === 'win32' ? a.toLowerCase() === b.toLowerCase() : a === b;
-const contains = (a, b) => samePath(a, b) || (process.platform === 'win32' ? b.toLowerCase().startsWith(a.toLowerCase() + path.sep) : b.startsWith(a + path.sep));
+const MAGIC = "moonrestore-repository-v1\n";
+const exists = (p) => {
+  try {
+    fs.lstatSync(p);
+    return true;
+  } catch (e) {
+    if (e.code === "ENOENT") return false;
+    throw e;
+  }
+};
+const samePath = (a, b) =>
+  process.platform === "win32" ? a.toLowerCase() === b.toLowerCase() : a === b;
+const contains = (a, b) =>
+  samePath(a, b) ||
+  (process.platform === "win32"
+    ? b.toLowerCase().startsWith(a.toLowerCase() + path.sep)
+    : b.startsWith(a + path.sep));
 
 function checkedPath(input, mustExist = true) {
-  if (typeof input !== 'string' || !input || input.includes('\0')) throw new Error('Invalid filesystem path');
+  if (typeof input !== "string" || !input || input.includes("\0"))
+    throw new Error("Invalid filesystem path");
   const full = path.resolve(input);
   const root = path.parse(full).root;
   let p = root;
@@ -30,104 +68,223 @@ function checkedPath(input, mustExist = true) {
     p = path.join(p, part);
     if (exists(p)) {
       const s = fs.lstatSync(p);
-      if (s.isSymbolicLink()) throw new Error(`Links/junctions are not supported: ${p}`);
+      if (s.isSymbolicLink())
+        throw new Error(`Links/junctions are not supported: ${p}`);
     } else if (mustExist) throw new Error(`Path does not exist: ${p}`);
   }
   return full;
 }
 
 function safeRelative(rel) {
-  if (typeof rel !== 'string' || !rel || rel.length > 1024 || /[\x00-\x1f\x7f\\:*?"<>|]/u.test(rel)) throw new Error('Unsafe relative path');
-  for (const part of rel.split('/')) {
-    if (!part || part === '.' || part === '..' || part.length > 255 || /[. ]$/.test(part) || /^(con|prn|aux|nul|conin\$|conout\$|com[1-9¹²³]|lpt[1-9¹²³])(?:\.|$)/i.test(part)) throw new Error('Unsafe relative component');
+  if (
+    typeof rel !== "string" ||
+    !rel ||
+    rel.length > 1024 ||
+    /[\x00-\x1f\x7f\\:*?"<>|]/u.test(rel)
+  )
+    throw new Error("Unsafe relative path");
+  for (const part of rel.split("/")) {
+    if (
+      !part ||
+      part === "." ||
+      part === ".." ||
+      part.length > 255 ||
+      /[. ]$/.test(part) ||
+      /^(con|prn|aux|nul|conin\$|conout\$|com[1-9¹²³]|lpt[1-9¹²³])(?:\.|$)/i.test(
+        part,
+      )
+    )
+      throw new Error("Unsafe relative component");
   }
   return rel;
 }
-const idPath = id => { if (!/^[a-f0-9]{64}$/.test(id)) throw new Error('Invalid content ID'); return id; };
+const idPath = (id) => {
+  if (!/^[a-f0-9]{64}$/.test(id)) throw new Error("Invalid content ID");
+  return id;
+};
 
 function syncDir(p) {
   // Windows does not expose portable directory fsync through Node. Documented
   // durability boundary: file contents are synced; rename metadata is best effort.
-  if (process.platform !== 'win32') {
-    const fd = fs.openSync(p, 'r');
-    try { fs.fsyncSync(fd); } finally { fs.closeSync(fd); }
+  if (process.platform !== "win32") {
+    const fd = fs.openSync(p, "r");
+    try {
+      fs.fsyncSync(fd);
+    } finally {
+      fs.closeSync(fd);
+    }
   }
 }
 
 function readBounded(p, max) {
   checkedPath(p);
   const s = fs.lstatSync(p);
-  if (!s.isFile() || s.size > max || s.nlink !== 1) throw new Error('Not a bounded regular file');
-  const fd = fs.openSync(p, fs.constants.O_RDONLY | (fs.constants.O_NOFOLLOW ?? 0));
+  if (!s.isFile() || s.size > max || s.nlink !== 1)
+    throw new Error("Not a bounded regular file");
+  const fd = fs.openSync(
+    p,
+    fs.constants.O_RDONLY | (fs.constants.O_NOFOLLOW ?? 0),
+  );
   try {
     const now = fs.fstatSync(fd);
-    if (now.dev !== s.dev || now.ino !== s.ino || now.size !== s.size) throw new Error('File changed before read');
+    if (now.dev !== s.dev || now.ino !== s.ino || now.size !== s.size)
+      throw new Error("File changed before read");
     const buf = Buffer.alloc(now.size);
     let offset = 0;
     while (offset < buf.length) {
       const n = fs.readSync(fd, buf, offset, buf.length - offset, null);
-      if (!n) throw new Error('Unexpected end of file');
+      if (!n) throw new Error("Unexpected end of file");
       offset += n;
     }
     const after = fs.fstatSync(fd);
-    if (after.size !== now.size || after.mtimeMs !== now.mtimeMs || after.ctimeMs !== now.ctimeMs) throw new Error('File changed during read');
+    if (
+      after.size !== now.size ||
+      after.mtimeMs !== now.mtimeMs ||
+      after.ctimeMs !== now.ctimeMs
+    )
+      throw new Error("File changed during read");
     return buf;
-  } finally { fs.closeSync(fd); }
+  } finally {
+    fs.closeSync(fd);
+  }
 }
 
 function writeNew(p, bytes) {
   checkedPath(path.dirname(p));
-  const fd = fs.openSync(p, 'wx', 0o600);
-  try { fs.writeFileSync(fd, bytes); fs.fsyncSync(fd); } finally { fs.closeSync(fd); }
+  const fd = fs.openSync(p, "wx", 0o600);
+  try {
+    fs.writeFileSync(fd, bytes);
+    fs.fsyncSync(fd);
+  } finally {
+    fs.closeSync(fd);
+  }
 }
 
 export class Host {
-  constructor({environment=process.env,allowMaintenance=false}={}) {
-    this.repo = null; this.held = false; this.source = null;
-    this.sourceEntries = new Map(); this.sourceRootStat = null; this.reader = null; this.restore = null;
-    this.bytes = new Uint8Array(); this.writes = 0;
-    this.vault = null; this.key = null;
-    this.environment=environment;this.allowMaintenance=allowMaintenance;
-    this.profile=1;
+  constructor({ environment = process.env, allowMaintenance = false } = {}) {
+    this.repo = null;
+    this.held = false;
+    this.source = null;
+    this.sourceEntries = new Map();
+    this.sourceRootStat = null;
+    this.reader = null;
+    this.restore = null;
+    this.bytes = new Uint8Array();
+    this.writes = 0;
+    this.vault = null;
+    this.key = null;
+    this.environment = environment;
+    this.allowMaintenance = allowMaintenance;
+    this.profile = 1;
+    this.attributes = [];
+    this.progress = {
+      phase: "starting",
+      read_bytes: 0,
+      written_bytes: 0,
+      files: 0,
+      objects: 0,
+    };
+    this.lastPulse = 0;
   }
-  storagePath(kind,id) {
-    idPath(id);const physical=storageId(this.key,kind,id);
-    return this.repoPath(kind==='object'?`objects/${physical.slice(0,2)}/${physical}`:`snapshots/${physical}.json`);
+  pulse(phase, force = false) {
+    const now = Date.now();
+    if (!force && now - this.lastPulse < 200) return;
+    this.lastPulse = now;
+    if (this.environment.MOONRESTORE_CONTROL) {
+      const control = JSON.parse(
+        readBounded(this.environment.MOONRESTORE_CONTROL, 128),
+      );
+      if (control.cancel) throw new Error("Operation cancelled");
+    }
+    if (this.environment.MOONRESTORE_PROGRESS === "1")
+      process.stderr.write(
+        "MR_PROGRESS:" + JSON.stringify({ ...this.progress, phase }) + "\n",
+      );
   }
-  readStored(kind,id) {
-    const physical=storageId(this.key,kind,id),limit=kind==='object'?1048576:33554432;
-    const raw=readBounded(this.storagePath(kind,id),limit+(this.key?ENVELOPE_OVERHEAD:0));
-    if(!this.key)return raw;
-    const item=unseal(this.key,this.vault,kind,physical,raw);
-    if(item.id!==id)throw new Error('Encrypted identity mismatch');return item.bytes;
+  storagePath(kind, id) {
+    idPath(id);
+    const physical = storageId(this.key, kind, id);
+    return this.repoPath(
+      kind === "object"
+        ? `objects/${physical.slice(0, 2)}/${physical}`
+        : `snapshots/${physical}.json`,
+    );
   }
-  encodeStored(kind,id,bytes){return this.key?seal(this.key,this.vault,kind,id,bytes):bytes;}
+  readStored(kind, id) {
+    const physical = storageId(this.key, kind, id),
+      limit = kind === "object" ? 1048576 : 33554432;
+    const raw = readBounded(
+      this.storagePath(kind, id),
+      limit + (this.key ? ENVELOPE_OVERHEAD : 0),
+    );
+    this.progress.read_bytes += raw.length;
+    if (!this.key) return raw;
+    const item = unseal(this.key, this.vault, kind, physical, raw);
+    if (item.id !== id) throw new Error("Encrypted identity mismatch");
+    return item.bytes;
+  }
+  encodeStored(kind, id, bytes) {
+    return this.key ? seal(this.key, this.vault, kind, id, bytes) : bytes;
+  }
   execute(op, text, bytes) {
-    try { this.bytes = new Uint8Array(); return JSON.stringify({ok: true, value: this.operation(op, JSON.parse(text), bytes)}); }
-    catch (e) { return JSON.stringify({ok: false, error: e.message}); }
+    try {
+      this.bytes = new Uint8Array();
+      return JSON.stringify({
+        ok: true,
+        value: this.operation(op, JSON.parse(text), bytes),
+      });
+    } catch (e) {
+      return JSON.stringify({ ok: false, error: e.message });
+    }
   }
   repoPath(rel) {
-    if (!this.repo) throw new Error('Repository not open');
+    if (!this.repo) throw new Error("Repository not open");
     return checkedPath(path.join(this.repo, rel), false);
   }
-  requireLock() { if (!this.held) throw new Error('Repository lock required'); }
+  requireLock() {
+    if (!this.held) throw new Error("Repository lock required");
+  }
   lock() {
-    const p = this.repoPath('.lock');
-    try { fs.mkdirSync(p, {mode: 0o700}); }
-    catch (e) { if (e.code === 'EEXIST') throw new Error('Repository locked; use recover only after the owning process has stopped'); throw e; }
-    try { writeNew(path.join(p, 'owner.json'), Buffer.from(JSON.stringify({pid: process.pid, host: os.hostname(), created: new Date().toISOString()}))); }
-    catch (e) { fs.rmdirSync(p); throw e; }
+    const p = this.repoPath(".lock");
+    try {
+      fs.mkdirSync(p, { mode: 0o700 });
+    } catch (e) {
+      if (e.code === "EEXIST")
+        throw new Error(
+          "Repository locked; use recover only after the owning process has stopped",
+        );
+      throw e;
+    }
+    try {
+      writeNew(
+        path.join(p, "owner.json"),
+        Buffer.from(
+          JSON.stringify({
+            pid: process.pid,
+            host: os.hostname(),
+            created: new Date().toISOString(),
+          }),
+        ),
+      );
+    } catch (e) {
+      fs.rmdirSync(p);
+      throw e;
+    }
     this.held = true;
   }
   unlock() {
     if (this.held) {
-      const p = this.repoPath('.lock');
-      fs.unlinkSync(checkedPath(path.join(p, 'owner.json')));
-      fs.rmdirSync(p); this.held = false;
+      const p = this.repoPath(".lock");
+      fs.unlinkSync(checkedPath(path.join(p, "owner.json")));
+      fs.rmdirSync(p);
+      this.held = false;
     }
   }
   clean() {
-    if (this.reader) { fs.closeSync(this.reader.fd); this.reader = null; }
+    if (this.reader) {
+      fs.closeSync(this.reader.fd);
+      this.reader = null;
+    }
     if (this.restore) {
       if (this.restore.fd !== null) fs.closeSync(this.restore.fd);
       this.restore.fd = null;
@@ -136,23 +293,30 @@ export class Host {
       this.restore = null;
     }
     this.unlock();
-    this.key?.fill(0);this.key=null;
+    this.key?.fill(0);
+    this.key = null;
   }
   store(id, bytes) {
-    this.requireLock(); idPath(id);
-    const final = this.storagePath('object',id);
-    if (exists(final)) { this.bytes = this.readStored('object',id); return {created: false}; }
+    this.requireLock();
+    idPath(id);
+    const final = this.storagePath("object", id);
+    if (exists(final)) {
+      this.bytes = this.readStored("object", id);
+      return { created: false };
+    }
     const parent = path.dirname(final);
-    if (!exists(parent)) fs.mkdirSync(parent, {mode: 0o700});
+    if (!exists(parent)) fs.mkdirSync(parent, { mode: 0o700 });
     const temp = this.repoPath(`tmp/${randomUUID()}.part`);
-    writeNew(temp, this.encodeStored('object',id,bytes));
-    this.failpoint('object-written');
-    fs.renameSync(temp, final); syncDir(parent);
+    writeNew(temp, this.encodeStored("object", id, bytes));
+    this.failpoint("object-written");
+    fs.renameSync(temp, final);
+    syncDir(parent);
     this.writes++;
-    return {created: true};
+    return { created: true };
   }
   failpoint(point) {
-    if (process.env.MOONRESTORE_TEST_FAILURE === point) throw new Error(`Injected failure: ${point}`);
+    if (process.env.MOONRESTORE_TEST_FAILURE === point)
+      throw new Error(`Injected failure: ${point}`);
     if (process.env.MOONRESTORE_TEST_CRASH === point) {
       process.stdout.write(`CRASH_POINT:${point}\n`);
       process.exit(86);
@@ -160,207 +324,480 @@ export class Host {
   }
   walk(source, excludes, limits) {
     const root = checkedPath(source);
-    if (!fs.lstatSync(root).isDirectory()) throw new Error('Source must be a directory');
-    if (contains(root, this.repo) || contains(this.repo, root)) throw new Error('Source and repository must not overlap');
-    this.source = root; this.sourceRootStat = fs.lstatSync(root); this.sourceEntries.clear();
-    const out = []; let total = 0;
+    if (!fs.lstatSync(root).isDirectory())
+      throw new Error("Source must be a directory");
+    if (contains(root, this.repo) || contains(this.repo, root))
+      throw new Error("Source and repository must not overlap");
+    this.source = root;
+    this.sourceRootStat = fs.lstatSync(root);
+    this.sourceEntries.clear();
+    const out = [];
+    let total = 0;
     for (const rel of excludes) safeRelative(rel);
-    const skipped = rel => excludes.some(ex => rel === ex || rel.startsWith(ex + '/'));
+    const skipped = (rel) =>
+      excludes.some((ex) => rel === ex || rel.startsWith(ex + "/"));
     const visit = (dir, prefix, depth) => {
-      if (depth > 64) throw new Error('Directory depth limit exceeded');
+      if (depth > 64) throw new Error("Directory depth limit exceeded");
       // Directory enumeration is incremental, not an unbounded readdir array.
       const iterator = fs.opendirSync(dir);
       try {
         for (let d = iterator.readSync(); d !== null; d = iterator.readSync()) {
           const rel = prefix ? `${prefix}/${d.name}` : d.name;
+          this.pulse("scan");
           if (skipped(rel)) continue;
           safeRelative(rel);
-          if (out.length >= limits.max_files) throw new Error('Entry count limit exceeded');
+          if (out.length >= limits.max_files)
+            throw new Error("Entry count limit exceeded");
           const p = checkedPath(path.join(dir, d.name));
           const stat = fs.lstatSync(p);
-          if (stat.isSymbolicLink() || (!stat.isFile() && !stat.isDirectory())) throw new Error(`Unsupported link/special file: ${rel}`);
-          if (stat.isFile() && stat.nlink !== 1) throw new Error(`Hard links are unsupported: ${rel}`);
-          if (stat.isFile() && stat.size > limits.max_file_bytes) throw new Error(`File size limit exceeded: ${rel}`);
+          if (stat.isSymbolicLink() || (!stat.isFile() && !stat.isDirectory()))
+            throw new Error(`Unsupported link/special file: ${rel}`);
+          if (stat.isFile() && stat.nlink !== 1)
+            throw new Error(`Hard links are unsupported: ${rel}`);
+          if (stat.isFile() && stat.size > limits.max_file_bytes)
+            throw new Error(`File size limit exceeded: ${rel}`);
           total += stat.isFile() ? stat.size : 0;
-          if (total > limits.max_total_bytes) throw new Error('Source byte limit exceeded');
-          const kind = stat.isDirectory() ? 'dir' : 'file';
-          out.push({path: rel, kind, size: String(kind === 'dir' ? 0 : stat.size)});
-          this.sourceEntries.set(rel, {p, stat});
-          if (kind === 'dir') visit(p, rel, depth + 1);
+          if (total > limits.max_total_bytes)
+            throw new Error("Source byte limit exceeded");
+          const kind = stat.isDirectory() ? "dir" : "file";
+          out.push({
+            path: rel,
+            kind,
+            size: String(kind === "dir" ? 0 : stat.size),
+          });
+          this.sourceEntries.set(rel, { p, stat });
+          if (kind === "dir") visit(p, rel, depth + 1);
         }
-      } finally { iterator.closeSync(); }
+      } finally {
+        iterator.closeSync();
+      }
     };
-    visit(root, '', 0);
-    out.sort((a,b) => a.path < b.path ? -1 : a.path > b.path ? 1 : 0);
+    visit(root, "", 0);
+    out.sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0));
     return out;
   }
-  unchanged(a, b) { return a.dev === b.dev && a.ino === b.ino && a.size === b.size && a.mtimeMs === b.mtimeMs && a.ctimeMs === b.ctimeMs; }
+  unchanged(a, b) {
+    return (
+      a.dev === b.dev &&
+      a.ino === b.ino &&
+      a.size === b.size &&
+      a.mtimeMs === b.mtimeMs &&
+      a.ctimeMs === b.ctimeMs
+    );
+  }
   operation(op, a, bytes) {
-    switch(op) {
-      case 'init': {
-        const encrypted = this.environment.MOONRESTORE_INIT_ENCRYPTED === '1';
-        const large = this.environment.MOONRESTORE_INIT_LARGE === '1';
-        const createdVault = encrypted ? createVault(this.environment.MOONRESTORE_PASSWORD) : null;
+    if (!["unlock", "recover"].includes(op)) this.pulse(op);
+    switch (op) {
+      case "init": {
+        const encrypted = this.environment.MOONRESTORE_INIT_ENCRYPTED === "1";
+        const large = this.environment.MOONRESTORE_INIT_LARGE === "1";
+        const createdVault = encrypted
+          ? createVault(this.environment.MOONRESTORE_PASSWORD)
+          : null;
         const p = checkedPath(a.path, false);
-        if (exists(p)) throw new Error('Repository target must not exist');
+        if (exists(p)) throw new Error("Repository target must not exist");
         checkedPath(path.dirname(p));
-        fs.mkdirSync(p, {mode: 0o700});
-        for (const name of ['objects','snapshots','tmp']) fs.mkdirSync(path.join(p,name), {mode: 0o700});
-        if(createdVault){writeNew(path.join(p,'encryption.json'),Buffer.from(JSON.stringify(createdVault.config)));createdVault.key.fill(0);}
-        writeNew(path.join(p,'repository-id'),Buffer.from(randomUUID()));
-        const magic=encrypted?ENCRYPTED_MAGIC:MAGIC;
-        writeNew(path.join(p,'moonrestore'), Buffer.from(large?magic.replace(/v[12]\n$/,'v3\n'):magic)); syncDir(p);
-        return {path: p, format: large?3:encrypted?2:1, encrypted};
+        fs.mkdirSync(p, { mode: 0o700 });
+        for (const name of ["objects", "snapshots", "tmp"])
+          fs.mkdirSync(path.join(p, name), { mode: 0o700 });
+        if (createdVault) {
+          writeNew(
+            path.join(p, "encryption.json"),
+            Buffer.from(JSON.stringify(createdVault.config)),
+          );
+          createdVault.key.fill(0);
+        }
+        writeNew(path.join(p, "repository-id"), Buffer.from(randomUUID()));
+        const magic = encrypted ? ENCRYPTED_MAGIC : MAGIC;
+        writeNew(
+          path.join(p, "moonrestore"),
+          Buffer.from(large ? magic.replace(/v[12]\n$/, "v3\n") : magic),
+        );
+        syncDir(p);
+        return { path: p, format: large ? 3 : encrypted ? 2 : 1, encrypted };
       }
-      case 'open': {
+      case "open": {
         this.repo = checkedPath(a.path);
-        const magic=readBounded(this.repoPath('moonrestore'), 128).toString('utf8');
-        this.profile=magic.endsWith('v3\n')?3:1;
-        if(magic===ENCRYPTED_MAGIC||magic===ENCRYPTED_MAGIC.replace('v2','v3')){this.vault=JSON.parse(readBounded(this.repoPath('encryption.json'),4096));this.key=unlockVault(this.vault,this.environment);}
-        else if(magic!==MAGIC&&magic!==MAGIC.replace('v1','v3'))throw new Error('Not a MoonRestore repository');
-        for (const name of ['objects','snapshots','tmp']) if (!fs.lstatSync(this.repoPath(name)).isDirectory()) throw new Error('Invalid repository layout');
-        if(exists(this.repoPath('.maintenance.json'))&&!this.allowMaintenance)throw new Error('Interrupted maintenance; run maintenance-recover before any other operation');
+        const magic = readBounded(this.repoPath("moonrestore"), 128).toString(
+          "utf8",
+        );
+        this.profile = magic.endsWith("v3\n") ? 3 : 1;
+        if (
+          magic === ENCRYPTED_MAGIC ||
+          magic === ENCRYPTED_MAGIC.replace("v2", "v3")
+        ) {
+          this.vault = JSON.parse(
+            readBounded(this.repoPath("encryption.json"), 4096),
+          );
+          this.key = unlockVault(this.vault, this.environment);
+        } else if (magic !== MAGIC && magic !== MAGIC.replace("v1", "v3"))
+          throw new Error("Not a MoonRestore repository");
+        for (const name of ["objects", "snapshots", "tmp"])
+          if (!fs.lstatSync(this.repoPath(name)).isDirectory())
+            throw new Error("Invalid repository layout");
+        if (
+          exists(this.repoPath(".maintenance.json")) &&
+          !this.allowMaintenance
+        )
+          throw new Error(
+            "Interrupted maintenance; run maintenance-recover before any other operation",
+          );
         return null;
       }
-      case 'lock': this.lock(); return null;
-      case 'unlock': this.unlock(); return null;
-      case 'clock': return new Date().toISOString();
-      case 'profile': return this.profile;
-      case 'walk': this.requireLock(); return this.walk(a.source, a.excludes, a.limits);
-      case 'open_source': {
-        this.requireLock(); if (this.reader) throw new Error('Source already open');
+      case "lock":
+        this.lock();
+        return null;
+      case "unlock":
+        this.unlock();
+        return null;
+      case "clock":
+        return new Date().toISOString();
+      case "profile":
+        return this.profile;
+      case "verify_tick":
+        this.progress.current_file_verified_bytes = Number(a.bytes);
+        return null;
+      case "verified_file":
+        this.progress.files++;
+        this.progress.verified_bytes =
+          (this.progress.verified_bytes || 0) + Number(a.bytes);
+        return null;
+      case "source_metadata":
+        return [...this.sourceEntries].map(([relative, { stat }]) => ({
+          path: relative,
+          mtime_ms: String(Math.max(0, Math.trunc(stat.mtimeMs))),
+          mode: stat.mode & 0o777,
+        }));
+      case "set_metadata":
+        this.attributes = a;
+        return null;
+      case "metadata":
+        return this.attributes;
+      case "walk":
+        this.requireLock();
+        return this.walk(a.source, a.excludes, a.limits);
+      case "open_source": {
+        this.requireLock();
+        if (this.reader) throw new Error("Source already open");
         const entry = this.sourceEntries.get(safeRelative(a.path));
-        if (!entry) throw new Error('Unknown source entry');
+        if (!entry) throw new Error("Unknown source entry");
         checkedPath(entry.p);
-        const fd = fs.openSync(entry.p, fs.constants.O_RDONLY | (fs.constants.O_NOFOLLOW ?? 0));
+        const fd = fs.openSync(
+          entry.p,
+          fs.constants.O_RDONLY | (fs.constants.O_NOFOLLOW ?? 0),
+        );
         const now = fs.fstatSync(fd);
-        if (!now.isFile() || now.nlink !== 1 || !this.unchanged(entry.stat, now)) { fs.closeSync(fd); throw new Error('Source changed before backup'); }
-        this.reader = {fd, initial: now, bytes: 0}; return null;
+        if (
+          !now.isFile() ||
+          now.nlink !== 1 ||
+          !this.unchanged(entry.stat, now)
+        ) {
+          fs.closeSync(fd);
+          throw new Error("Source changed before backup");
+        }
+        this.reader = { fd, initial: now, bytes: 0 };
+        return null;
       }
-      case 'read_source': {
-        if (!this.reader || !Number.isInteger(a.max) || a.max < 1 || a.max > 1048576) throw new Error('Invalid source read');
+      case "read_source": {
+        if (
+          !this.reader ||
+          !Number.isInteger(a.max) ||
+          a.max < 1 ||
+          a.max > 1048576
+        )
+          throw new Error("Invalid source read");
         const buf = Buffer.alloc(a.max);
         const count = fs.readSync(this.reader.fd, buf, 0, a.max, null);
         this.reader.bytes += count;
-        if (this.reader.bytes > this.reader.initial.size) throw new Error('Source grew during backup');
-        this.bytes = buf.subarray(0,count); return count;
+        this.progress.read_bytes += count;
+        if (this.reader.bytes > this.reader.initial.size)
+          throw new Error("Source grew during backup");
+        this.bytes = buf.subarray(0, count);
+        return count;
       }
-      case 'close_source': {
-        if (!this.reader) throw new Error('No source open');
-        const r = this.reader; this.reader = null;
-        try { if (!this.unchanged(r.initial, fs.fstatSync(r.fd)) || r.bytes !== r.initial.size) throw new Error('Source changed during backup'); }
-        finally { fs.closeSync(r.fd); }
+      case "close_source": {
+        if (!this.reader) throw new Error("No source open");
+        const r = this.reader;
+        this.reader = null;
+        try {
+          if (
+            !this.unchanged(r.initial, fs.fstatSync(r.fd)) ||
+            r.bytes !== r.initial.size
+          )
+            throw new Error("Source changed during backup");
+        } finally {
+          fs.closeSync(r.fd);
+        }
+        this.progress.files++;
         return null;
       }
-      case 'check_source': {
-        if (!this.unchanged(this.sourceRootStat,fs.lstatSync(checkedPath(this.source)))) throw new Error('Source root changed during backup');
-        for (const {p, stat} of this.sourceEntries.values()) {
-          if (!this.unchanged(stat, fs.lstatSync(checkedPath(p)))) throw new Error('Source tree changed during backup');
+      case "check_source": {
+        if (
+          !this.unchanged(
+            this.sourceRootStat,
+            fs.lstatSync(checkedPath(this.source)),
+          )
+        )
+          throw new Error("Source root changed during backup");
+        for (const { p, stat } of this.sourceEntries.values()) {
+          if (!this.unchanged(stat, fs.lstatSync(checkedPath(p))))
+            throw new Error("Source tree changed during backup");
         }
         return null;
       }
-      case 'put': return this.store(a.id, bytes);
-      case 'get': this.requireLock(); this.bytes = this.readStored('object',a.id); return this.bytes.length;
-      case 'commit': {
-        this.requireLock(); idPath(a.id);
-        if (bytes.length > 33554432) throw new Error('Manifest too large');
-        const final = this.storagePath('manifest',a.id);
-        if (exists(final)) throw new Error('Snapshot already exists');
+      case "put":
+        this.progress.objects++;
+        return this.store(a.id, bytes);
+      case "get":
+        this.requireLock();
+        this.bytes = this.readStored("object", a.id);
+        return this.bytes.length;
+      case "commit": {
+        this.requireLock();
+        idPath(a.id);
+        if (bytes.length > 33554432) throw new Error("Manifest too large");
+        const final = this.storagePath("manifest", a.id);
+        if (exists(final)) throw new Error("Snapshot already exists");
         const temp = this.repoPath(`tmp/${randomUUID()}.manifest`);
-        writeNew(temp, this.encodeStored('manifest',a.id,bytes)); this.failpoint('manifest-written');
-        fs.renameSync(temp, final); syncDir(path.dirname(final));
+        writeNew(temp, this.encodeStored("manifest", a.id, bytes));
+        this.failpoint("manifest-written");
+        fs.renameSync(temp, final);
+        syncDir(path.dirname(final));
         return null;
       }
-      case 'manifest': this.requireLock(); this.bytes = this.readStored('manifest',a.id); return this.bytes.length;
-      case 'list': {
-        this.requireLock(); const ids = [];
-        const dir = fs.opendirSync(this.repoPath('snapshots'));
-        try { for (let d = dir.readSync(); d !== null; d = dir.readSync()) {
-          if (!/^[a-f0-9]{64}\.json$/.test(d.name)) throw new Error('Unexpected snapshot file');
-          if (ids.length >= 100000) throw new Error('Snapshot count limit exceeded');
-          if(this.key){const raw=readBounded(this.repoPath('snapshots/'+d.name),33554432+ENVELOPE_OVERHEAD);ids.push(unseal(this.key,this.vault,'manifest',d.name.slice(0,-5),raw).id);}
-          else ids.push(d.name.slice(0,-5));
-        } } finally { dir.closeSync(); }
+      case "manifest":
+        this.requireLock();
+        this.bytes = this.readStored("manifest", a.id);
+        return this.bytes.length;
+      case "list": {
+        this.requireLock();
+        const ids = [];
+        const dir = fs.opendirSync(this.repoPath("snapshots"));
+        try {
+          for (let d = dir.readSync(); d !== null; d = dir.readSync()) {
+            if (!/^[a-f0-9]{64}\.json$/.test(d.name))
+              throw new Error("Unexpected snapshot file");
+            if (ids.length >= 100000)
+              throw new Error("Snapshot count limit exceeded");
+            if (this.key) {
+              const raw = readBounded(
+                this.repoPath("snapshots/" + d.name),
+                33554432 + ENVELOPE_OVERHEAD,
+              );
+              ids.push(
+                unseal(
+                  this.key,
+                  this.vault,
+                  "manifest",
+                  d.name.slice(0, -5),
+                  raw,
+                ).id,
+              );
+            } else ids.push(d.name.slice(0, -5));
+          }
+        } finally {
+          dir.closeSync();
+        }
         return ids.sort();
       }
-      case 'inventory': {
-        this.requireLock(); const out = [];
-        const root = this.repoPath('objects'); const shards = fs.opendirSync(root);
-        try { for(let shard=shards.readSync();shard!==null;shard=shards.readSync()) {
-          if(!/^[a-f0-9]{2}$/.test(shard.name)) throw new Error('Unexpected object shard');
-          const p=checkedPath(path.join(root,shard.name));
-          if(!fs.lstatSync(p).isDirectory()) throw new Error('Invalid object shard');
-          const files=fs.opendirSync(p);
-          try { for(let file=files.readSync();file!==null;file=files.readSync()) {
-            idPath(file.name);
-            if(!file.name.startsWith(shard.name)) throw new Error('Object in incorrect shard');
-            const s=fs.lstatSync(checkedPath(path.join(p,file.name)));
-            if(!s.isFile()||s.nlink!==1||s.size>1048576+(this.key?ENVELOPE_OVERHEAD:0)) throw new Error('Invalid object file');
-            if(out.length>=1000000) throw new Error('Object inventory limit exceeded');
-            if(this.key){const item=unseal(this.key,this.vault,'object',file.name,readBounded(path.join(p,file.name),1048576+ENVELOPE_OVERHEAD));out.push({id:item.id,size:item.bytes.length});}
-            else out.push({id:file.name,size:s.size});
-          }} finally {files.closeSync();}
-        }} finally {shards.closeSync();}
+      case "inventory": {
+        this.requireLock();
+        const out = [];
+        const root = this.repoPath("objects");
+        const shards = fs.opendirSync(root);
+        try {
+          for (
+            let shard = shards.readSync();
+            shard !== null;
+            shard = shards.readSync()
+          ) {
+            if (!/^[a-f0-9]{2}$/.test(shard.name))
+              throw new Error("Unexpected object shard");
+            const p = checkedPath(path.join(root, shard.name));
+            if (!fs.lstatSync(p).isDirectory())
+              throw new Error("Invalid object shard");
+            const files = fs.opendirSync(p);
+            try {
+              for (
+                let file = files.readSync();
+                file !== null;
+                file = files.readSync()
+              ) {
+                idPath(file.name);
+                if (!file.name.startsWith(shard.name))
+                  throw new Error("Object in incorrect shard");
+                const s = fs.lstatSync(checkedPath(path.join(p, file.name)));
+                if (
+                  !s.isFile() ||
+                  s.nlink !== 1 ||
+                  s.size > 1048576 + (this.key ? ENVELOPE_OVERHEAD : 0)
+                )
+                  throw new Error("Invalid object file");
+                if (out.length >= 1000000)
+                  throw new Error("Object inventory limit exceeded");
+                if (this.key) {
+                  const item = unseal(
+                    this.key,
+                    this.vault,
+                    "object",
+                    file.name,
+                    readBounded(
+                      path.join(p, file.name),
+                      1048576 + ENVELOPE_OVERHEAD,
+                    ),
+                  );
+                  out.push({ id: item.id, size: item.bytes.length });
+                } else out.push({ id: file.name, size: s.size });
+              }
+            } finally {
+              files.closeSync();
+            }
+          }
+        } finally {
+          shards.closeSync();
+        }
         return out;
       }
-      case 'recover': {
-        const p = this.repoPath('.lock');
+      case "recover": {
+        const p = this.repoPath(".lock");
         if (exists(p)) {
-          const owner = JSON.parse(readBounded(path.join(p,'owner.json'), 1024).toString('utf8'));
-          if (owner.host !== os.hostname() || !Number.isInteger(owner.pid) || owner.pid <= 0) throw new Error('Cannot safely recover foreign/invalid lock');
-          try { process.kill(owner.pid, 0); throw new Error('Lock owner is still running'); }
-          catch (e) { if (e.code !== 'ESRCH') throw e; }
-          fs.unlinkSync(path.join(p,'owner.json')); fs.rmdirSync(p);
+          const owner = JSON.parse(
+            readBounded(path.join(p, "owner.json"), 1024).toString("utf8"),
+          );
+          if (
+            owner.host !== os.hostname() ||
+            !Number.isInteger(owner.pid) ||
+            owner.pid <= 0
+          )
+            throw new Error("Cannot safely recover foreign/invalid lock");
+          try {
+            process.kill(owner.pid, 0);
+            throw new Error("Lock owner is still running");
+          } catch (e) {
+            if (e.code !== "ESRCH") throw e;
+          }
+          fs.unlinkSync(path.join(p, "owner.json"));
+          fs.rmdirSync(p);
         }
         this.lock();
         let removed = 0;
         // Temp cleanup only; committed chunks/snapshots are NEVER deleted here.
-        const dir = this.repoPath('tmp');
-        const files=fs.opendirSync(dir); let visited=0;
-        try { for(let entry=files.readSync();entry!==null;entry=files.readSync()) {
-          if(++visited>100000) throw new Error('Temporary entry limit exceeded');
-          const name=entry.name;
-          if (!/^[a-f0-9-]{36}\.(part|manifest)$/.test(name)) continue;
-          const f = checkedPath(path.join(dir,name));
-          if (!fs.lstatSync(f).isFile()) throw new Error('Unexpected temporary entry');
-          fs.unlinkSync(f); removed++;
-        }} finally {files.closeSync();}
-        this.unlock(); return {removed_temporary_files: removed, committed_data_deleted: false};
+        const dir = this.repoPath("tmp");
+        const files = fs.opendirSync(dir);
+        let visited = 0;
+        try {
+          for (
+            let entry = files.readSync();
+            entry !== null;
+            entry = files.readSync()
+          ) {
+            if (++visited > 100000)
+              throw new Error("Temporary entry limit exceeded");
+            const name = entry.name;
+            if (!/^[a-f0-9-]{36}\.(part|manifest)$/.test(name)) continue;
+            const f = checkedPath(path.join(dir, name));
+            if (!fs.lstatSync(f).isFile())
+              throw new Error("Unexpected temporary entry");
+            fs.unlinkSync(f);
+            removed++;
+          }
+        } finally {
+          files.closeSync();
+        }
+        this.unlock();
+        return {
+          removed_temporary_files: removed,
+          committed_data_deleted: false,
+        };
       }
-      case 'begin_restore': {
-        this.requireLock(); if (this.restore) throw new Error('Restore already active');
+      case "begin_restore": {
+        this.requireLock();
+        if (this.restore) throw new Error("Restore already active");
         const target = checkedPath(a.target, false);
-        if (exists(target)) throw new Error('Restore target must not exist');
-        if (contains(this.repo, target) || contains(target, this.repo)) throw new Error('Restore/repository overlap');
+        if (exists(target)) throw new Error("Restore target must not exist");
+        if (contains(this.repo, target) || contains(target, this.repo))
+          throw new Error("Restore/repository overlap");
         const parent = checkedPath(path.dirname(target));
         const stage = path.join(parent, `.moonrestore-${randomUUID()}.partial`);
-        fs.mkdirSync(stage, {mode: 0o700});
-        this.restore = {target, parent, stage, fd: null}; return {staging: stage};
+        fs.mkdirSync(stage, { mode: 0o700 });
+        this.restore = { target, parent, stage, fd: null };
+        return { staging: stage };
       }
-      case 'restore_dir': {
-        if (!this.restore) throw new Error('Restore not active');
-        const p = path.join(this.restore.stage,safeRelative(a.path)); checkedPath(p,false);
-        fs.mkdirSync(p, {mode: 0o700}); syncDir(path.dirname(p)); return null;
+      case "restore_dir": {
+        if (!this.restore) throw new Error("Restore not active");
+        const p = path.join(this.restore.stage, safeRelative(a.path));
+        checkedPath(p, false);
+        fs.mkdirSync(p, { mode: 0o700 });
+        syncDir(path.dirname(p));
+        return null;
       }
-      case 'restore_open': {
-        if (!this.restore || this.restore.fd !== null) throw new Error('Invalid restore open');
-        const p = path.join(this.restore.stage,safeRelative(a.path)); checkedPath(p,false);
-        this.restore.fd = fs.openSync(p,'wx',0o600); this.restore.fileParent = path.dirname(p); return null;
+      case "restore_open": {
+        if (!this.restore || this.restore.fd !== null)
+          throw new Error("Invalid restore open");
+        const p = path.join(this.restore.stage, safeRelative(a.path));
+        checkedPath(p, false);
+        this.restore.fd = fs.openSync(p, "wx", 0o600);
+        this.restore.fileParent = path.dirname(p);
+        return null;
       }
-      case 'restore_write': if (!this.restore || this.restore.fd === null) throw new Error('No restore file open'); fs.writeFileSync(this.restore.fd,bytes); this.failpoint('restore-written'); return null;
-      case 'restore_close': {
-        if (!this.restore || this.restore.fd === null) throw new Error('No restore file open');
-        fs.fsyncSync(this.restore.fd); fs.closeSync(this.restore.fd); this.restore.fd = null;
-        syncDir(this.restore.fileParent); return null;
+      case "restore_write":
+        if (!this.restore || this.restore.fd === null)
+          throw new Error("No restore file open");
+        fs.writeFileSync(this.restore.fd, bytes);
+        this.progress.written_bytes += bytes.length;
+        this.failpoint("restore-written");
+        return null;
+      case "restore_close": {
+        if (!this.restore || this.restore.fd === null)
+          throw new Error("No restore file open");
+        fs.fsyncSync(this.restore.fd);
+        fs.closeSync(this.restore.fd);
+        this.restore.fd = null;
+        syncDir(this.restore.fileParent);
+        return null;
       }
-      case 'finish_restore': {
-        const r = this.restore; if (!r || r.fd !== null) throw new Error('Invalid restore completion');
-        if (exists(r.target)) throw new Error('Restore target appeared; refusing overwrite');
-        checkedPath(r.parent); syncDir(r.stage); this.failpoint('restore-complete');
-        publishDirectory(r.stage,r.target); syncDir(r.parent); this.restore = null;
-        return {target: r.target};
+      case "finish_restore": {
+        const r = this.restore;
+        if (!r || r.fd !== null) throw new Error("Invalid restore completion");
+        if (exists(r.target))
+          throw new Error("Restore target appeared; refusing overwrite");
+        checkedPath(r.parent);
+        syncDir(r.stage);
+        this.failpoint("restore-complete");
+        for (const item of [...this.attributes].sort(
+          (a, b) => b.path.length - a.path.length,
+        )) {
+          const file = path.join(r.stage, safeRelative(item.path));
+          if (!exists(file)) continue;
+          checkedPath(file);
+          const seconds = Number(item.mtime_ms) / 1000;
+          if (
+            !Number.isFinite(seconds) ||
+            seconds < 0 ||
+            seconds > 253402300799
+          )
+            throw new Error("Invalid restored timestamp");
+          fs.utimesSync(file, seconds, seconds);
+          if (
+            this.environment.MOONRESTORE_RESTORE_MODES === "1" &&
+            process.platform !== "win32"
+          ) {
+            if (
+              !Number.isInteger(item.mode) ||
+              item.mode < 0 ||
+              item.mode > 0o777
+            )
+              throw new Error("Invalid restored mode");
+            fs.chmodSync(file, item.mode);
+          }
+        }
+        publishDirectory(r.stage, r.target);
+        syncDir(r.parent);
+        this.restore = null;
+        return { target: r.target };
       }
-      default: throw new Error(`Unsupported operation: ${op}`);
+      default:
+        throw new Error(`Unsupported operation: ${op}`);
     }
   }
 }

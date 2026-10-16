@@ -1,10 +1,483 @@
 <!doctype html>
-<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>MoonRestore · 本机备份工作台</title><link rel="stylesheet" href="/style.css"><script type="module" src="/app.js"></script></head>
-<body><a class="skip" href="#main">跳到主要内容</a><div class="shell"><aside><div class="brand">MoonRestore<span>本机备份工作台 · 0.2</span></div><nav aria-label="主导航"><a href="#overview">任务概览</a><a href="#setup">配置备份</a><a href="#versions">版本与恢复</a><a href="#evidence">校验与演练</a></nav><div class="boundary"><strong>你的文件，留在本机。</strong><p>不上传资料，不连接云账户。独立副本和定期恢复演练，才是重要资料保护的一部分。</p><span id="connection">正在检查本机会话</span></div></aside>
-<main id="main"><header><div><p class="eyebrow">LOCAL RECOVERY WORKSPACE</p><h1>备份之后，确认能够恢复。</h1><p>从最近一次成功备份，到实际恢复验证，每一步都留下清晰记录。</p></div><span class="local-label">仅本机访问</span></header>
-<div id="message" role="status" aria-live="polite">准备就绪。请先配置任务，或直接打开已有仓库。</div>
-<section id="overview"><div class="section-title"><h2>备份任务</h2><button id="refresh" type="button" class="secondary">刷新状态</button></div><div id="jobs" class="empty">尚无任务。下方添加你的第一个备份任务。</div></section>
-<section id="setup"><div class="section-title"><h2>配置一份可恢复的备份</h2><span>先预检查，再执行</span></div><form id="job-form"><div class="form-grid"><label>任务名称<input name="id" required pattern="[a-zA-Z0-9][a-zA-Z0-9_-]{0,47}" placeholder="papers" autocomplete="off"><small>使用字母、数字、下划线或短横线。</small></label><label>源文件夹完整路径<input name="source" required placeholder="D:\Research" autocomplete="off"></label><label>备份仓库完整路径<input name="repository" required placeholder="E:\MoonRestoreVault" autocomplete="off"><small>重要资料建议使用独立磁盘，而非同盘的另一个文件夹。</small></label><label>检查间隔（分钟）<input name="intervalMinutes" type="number" min="1" max="10080" value="1440" required><small>保存任务不会擅自注册系统计划任务；可按说明另行启用。</small></label></div><div class="actions"><button type="submit">保存备份任务</button><button id="capacity" class="secondary" type="button">预检查容量</button><button id="init" class="secondary" type="button">创建新仓库</button></div></form><p class="muted">自动任务拒绝意外空目录和明显文件数量下降。此页面创建普通仓库；加密仓库请使用 CLI 初始化和授权解锁。</p></section>
-<section id="versions"><div class="section-title"><h2>找到需要的历史版本</h2><span>恢复从不覆盖已有目录</span></div><form id="open-form" class="inline"><label>仓库路径<input name="repository" id="open-repo" required placeholder="选择已有任务，或输入仓库完整路径" autocomplete="off"></label><button type="submit">读取版本</button></form><div id="snapshots" class="empty">读取仓库后，这里显示最近 100 个版本。</div><div id="selection" hidden><h3 id="selected-label">已选版本</h3><p id="snapshot-id" class="mono"></p><div id="catalog"></div><div class="actions"><button id="prev-page" class="secondary" type="button">上一页</button><span id="page-label"></span><button id="next-page" class="secondary" type="button">下一页</button></div><form id="restore-form"><div class="form-grid"><label>恢复到全新目录<input name="target" required placeholder="D:\RecoveredPapers" autocomplete="off"></label><label>仅恢复指定文件或子目录（可留空）<input name="prefix" placeholder="资料/论文.md" autocomplete="off"><small>点击文件列表可选择相对路径。</small></label></div><div class="actions"><button type="submit" class="secondary">预览恢复范围</button><button id="restore-confirm" type="button" disabled>确认恢复到新目录</button></div><p id="restore-plan" class="muted"></p></form></div></section>
-<section id="evidence"><div class="section-title"><h2>用恢复结果检查备份</h2><span>不是一枚永久有效的绿色勾</span></div><p>完整校验读取保存的内容；恢复演练另在临时目录还原文件，再从磁盘读回检查。结果只代表本次时间与范围。</p><div class="actions"><button id="report" type="button">校验整个仓库</button><button id="drill" type="button" class="secondary">演练所选版本</button><button id="retention" type="button" class="secondary">预览保留策略</button></div><details><summary>查看本次结果与报告路径</summary><pre id="result">还没有执行记录。</pre></details></section>
-<footer>MoonRestore · Apache-2.0 · 保留源文件，保护恢复密钥。当前页面不代表公网服务或生产可靠性认证。</footer></main></div></body></html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>MoonRestore · 本机备份工作台</title>
+    <link rel="stylesheet" href="/style.css" />
+    <script type="module" src="/app.js"></script>
+  </head>
+  <body>
+    <a class="skip" href="#main">跳到主要内容</a>
+    <div class="shell">
+      <aside>
+        <div class="brand">MoonRestore<span>本机备份工作台 · 0.3</span></div>
+        <nav aria-label="主导航">
+          <a href="#overview">任务概览</a><a href="#setup">配置备份</a
+          ><a href="#versions">版本与恢复</a><a href="#evidence">校验与演练</a>
+        </nav>
+        <div class="boundary">
+          <strong>你的文件，留在本机。</strong>
+          <p>
+            不上传资料，不连接云账户。独立副本和定期恢复演练，才是重要资料保护的一部分。
+          </p>
+          <span id="connection">正在检查本机会话</span>
+        </div>
+      </aside>
+      <main id="main">
+        <header>
+          <div>
+            <p class="eyebrow">LOCAL RECOVERY WORKSPACE</p>
+            <h1>备份之后，确认能够恢复。</h1>
+            <p>从最近一次成功备份，到实际恢复验证，每一步都留下清晰记录。</p>
+          </div>
+          <span class="local-label">仅本机访问</span>
+        </header>
+        <div id="message" role="status" aria-live="polite">
+          准备就绪。请先配置任务，或直接打开已有仓库。
+        </div>
+        <section id="overview">
+          <div class="section-title">
+            <h2>备份任务</h2>
+            <button id="refresh" type="button" class="secondary">
+              刷新状态
+            </button>
+          </div>
+          <div id="jobs" class="empty">
+            尚无任务。下方添加你的第一个备份任务。
+          </div>
+        </section>
+        <section id="setup">
+          <div class="section-title">
+            <h2>配置一份可恢复的备份</h2>
+            <span>先预检查，再执行</span>
+          </div>
+          <form id="job-form">
+            <div class="form-grid">
+              <label
+                >任务名称<input
+                  name="id"
+                  required
+                  pattern="[a-zA-Z0-9][a-zA-Z0-9_-]{0,47}"
+                  placeholder="papers"
+                  autocomplete="off"
+                /><small>使用字母、数字、下划线或短横线。</small></label
+              ><label
+                >源文件夹完整路径<input
+                  name="source"
+                  required
+                  placeholder="D:\Research"
+                  autocomplete="off" /></label
+              ><label
+                >备份仓库完整路径<input
+                  name="repository"
+                  required
+                  placeholder="E:\MoonRestoreVault"
+                  autocomplete="off"
+                /><small
+                  >重要资料建议使用独立磁盘，而非同盘的另一个文件夹。</small
+                ></label
+              ><label
+                >检查间隔（分钟）<input
+                  name="intervalMinutes"
+                  type="number"
+                  min="1"
+                  max="10080"
+                  value="1440"
+                  required
+                /><small
+                  >保存任务不会擅自注册系统计划任务；可按说明另行启用。</small
+                ></label
+              >
+            </div>
+            <div class="actions">
+              <button type="submit">保存备份任务</button
+              ><button id="capacity" class="secondary" type="button">
+                预检查容量</button
+              ><button id="init" class="secondary" type="button">
+                创建新仓库
+              </button>
+            </div>
+          </form>
+          <p class="muted">
+            自动任务拒绝意外空目录和明显文件数量下降。此页面创建普通仓库；加密仓库请使用
+            CLI 初始化和授权解锁。
+          </p>
+        </section>
+        <section id="versions">
+          <div class="section-title">
+            <h2>找到需要的历史版本</h2>
+            <span>恢复从不覆盖已有目录</span>
+          </div>
+          <form id="open-form" class="inline">
+            <label
+              >仓库路径<input
+                name="repository"
+                id="open-repo"
+                required
+                placeholder="选择已有任务，或输入仓库完整路径"
+                autocomplete="off" /></label
+            ><button type="submit">读取版本</button>
+          </form>
+          <div id="snapshots" class="empty">
+            读取仓库后，这里显示最近 100 个版本。
+          </div>
+          <div id="selection" hidden>
+            <h3 id="selected-label">已选版本</h3>
+            <p id="snapshot-id" class="mono"></p>
+            <div id="catalog"></div>
+            <div class="actions">
+              <button id="prev-page" class="secondary" type="button">
+                上一页</button
+              ><span id="page-label"></span
+              ><button id="next-page" class="secondary" type="button">
+                下一页
+              </button>
+            </div>
+            <form id="restore-form">
+              <div class="form-grid">
+                <label
+                  >恢复到全新目录<input
+                    name="target"
+                    required
+                    placeholder="D:\RecoveredPapers"
+                    autocomplete="off" /></label
+                ><label
+                  >仅恢复指定文件或子目录（可留空）<input
+                    name="prefix"
+                    placeholder="资料/论文.md"
+                    autocomplete="off"
+                  /><small>点击文件列表可选择相对路径。</small></label
+                >
+              </div>
+              <div class="actions">
+                <button type="submit" class="secondary">预览恢复范围</button
+                ><button id="restore-confirm" type="button" disabled>
+                  确认恢复到新目录
+                </button>
+              </div>
+              <p id="restore-plan" class="muted"></p>
+            </form>
+          </div>
+        </section>
+        <section id="evidence">
+          <div class="section-title">
+            <h2>用恢复结果检查备份</h2>
+            <span>不是一枚永久有效的绿色勾</span>
+          </div>
+          <p>
+            完整校验读取保存的内容；恢复演练另在临时目录还原文件，再从磁盘读回检查。结果只代表本次时间与范围。
+          </p>
+          <div class="actions">
+            <button id="report" type="button">校验整个仓库</button
+            ><button id="drill" type="button" class="secondary">
+              演练所选版本</button
+            ><button id="retention" type="button" class="secondary">
+              预览保留策略
+            </button>
+          </div>
+          <details>
+            <summary>查看本次结果与报告路径</summary>
+            <pre id="result">还没有执行记录。</pre>
+          </details>
+        </section>
+        <section id="security">
+          <div class="section-title">
+            <h2>加密与换机恢复准备</h2>
+            <button id="forget-keys" type="button" class="secondary">
+              忘记本次解锁
+            </button>
+          </div>
+          <p>
+            解锁信息只保留在当前服务会话内，30
+            分钟后过期；不写入任务配置。恢复密钥能解密资料，须与仓库分开私有保管。
+          </p>
+          <div class="form-grid">
+            <label
+              >加密仓库完整路径<input
+                id="secure-repository"
+                autocomplete="off" /></label
+            ><label
+              >密码（创建或解锁）<input
+                id="secure-password"
+                type="password"
+                autocomplete="off" /></label
+            ><label
+              >独立恢复密钥文件<input
+                id="secure-key"
+                autocomplete="off"
+              /><button
+                type="button"
+                class="secondary"
+                data-pick="#secure-key"
+                data-kind="key-open"
+              >
+                选择恢复密钥
+              </button></label
+            ><label class="check"
+              ><input id="remember-key" type="checkbox" />明确授权当前 Windows
+              用户使用 DPAPI 保存密钥</label
+            >
+          </div>
+          <div class="actions">
+            <button id="unlock" type="button">解锁已有仓库</button
+            ><button id="init-encrypted" type="button" class="secondary">
+              创建全新加密仓库
+            </button>
+          </div>
+          <details>
+            <summary>导出密钥、验证恢复方式与修改密码</summary>
+            <div class="form-grid">
+              <label
+                >导出到新的私有文件<input
+                  id="export-key-path"
+                  autocomplete="off"
+                /><button
+                  type="button"
+                  class="secondary"
+                  data-pick="#export-key-path"
+                  data-kind="key-save"
+                >
+                  选择导出位置
+                </button></label
+              ><label
+                >新密码（仅修改密码时填写）<input
+                  id="new-password"
+                  type="password"
+                  autocomplete="new-password"
+              /></label>
+            </div>
+            <div class="actions">
+              <button id="export-key" type="button" class="secondary">
+                确认导出恢复密钥</button
+              ><button id="key-drill" type="button" class="secondary">
+                仅用恢复密钥演练所选版本</button
+              ><button id="change-password" type="button" class="secondary">
+                修改密码包装
+              </button>
+            </div>
+            <p>
+              修改密码不更换仓库主密钥，不能撤销旧配置或旧恢复密钥；主密钥更换应迁移到独立的新加密仓库。
+            </p>
+          </details>
+        </section>
+        <section id="reminders">
+          <div class="section-title">
+            <h2>本机提醒</h2>
+            <button id="enable-notifications" type="button" class="secondary">
+              允许浏览器会话通知
+            </button>
+          </div>
+          <div id="notices" class="muted">
+            尚无任务提醒。未启用远程邮件、Webhook 或遥测。
+          </div>
+        </section>
+        <template id="task-template"
+          ><section id="task-status" hidden aria-live="polite">
+            <div class="section-title">
+              <h2>当前操作</h2>
+              <button id="task-cancel" type="button" class="secondary" disabled>
+                请求安全取消
+              </button>
+            </div>
+            <p id="task-progress">等待真实进度。</p>
+            <small
+              >计数不是虚构百分比；取消后已提交的完整快照保留，暂存恢复不覆盖目标。</small
+            >
+          </section></template
+        >
+        <template id="advanced-template"
+          ><label class="check"
+            ><input
+              name="automatic"
+              type="checkbox"
+            />明确允许托盘工作台运行时执行到期任务（不是系统服务）</label
+          >
+          <details>
+            <summary>路径选择、可靠性、第二副本与提醒</summary>
+            <div class="actions">
+              <button
+                type="button"
+                class="secondary"
+                data-pick="#job-form [name=source]"
+              >
+                选择源文件夹</button
+              ><button
+                type="button"
+                class="secondary"
+                data-pick="#job-form [name=repository]"
+              >
+                选择已有仓库</button
+              ><button
+                type="button"
+                class="secondary"
+                data-pick="#job-form [name=repository]"
+                data-new-repo="1"
+              >
+                选择新仓库父目录
+              </button>
+            </div>
+            <div class="form-grid">
+              <label
+                >每几次成功任务做恢复演练<input
+                  name="drillEvery"
+                  type="number"
+                  min="1"
+                  max="365"
+                  value="7" /></label
+              ><label
+                >容量保留字节<input
+                  name="reserveBytes"
+                  inputmode="numeric"
+                  value="268435456" /></label
+              ><label
+                >允许条目数量下降百分比<input
+                  name="maxDropPercent"
+                  type="number"
+                  min="1"
+                  max="100"
+                  value="30" /></label
+              ><label
+                >整项任务预算（分钟）<input
+                  name="maxRuntimeMinutes"
+                  type="number"
+                  min="1"
+                  max="1440"
+                  value="30" /></label
+              ><label
+                >设备离线最多重试次数<input
+                  name="retryLimit"
+                  type="number"
+                  min="0"
+                  max="3"
+                  value="2" /></label
+              ><label
+                >重试间隔（分钟）<input
+                  name="retryMinutes"
+                  type="number"
+                  min="1"
+                  max="1440"
+                  value="15" /></label
+              ><label
+                >排除相对路径（一行一项）<textarea
+                  name="excludes"
+                  rows="3"
+                  placeholder="cache&#10;node_modules"
+                ></textarea></label
+              ><label
+                >第二副本仓库（可选，须已初始化）<input
+                  name="secondaryRepository"
+                  autocomplete="off"
+                /><small
+                  >加密副本先在下方创建并解锁；不把密码保存到任务。</small
+                ></label
+              ><label class="check"
+                ><input
+                  name="allowEmpty"
+                  type="checkbox"
+                />明确允许空源目录</label
+              ><label class="check"
+                ><input name="notify" type="checkbox" />允许 Windows
+                本机桌面提醒（不联网）</label
+              >
+            </div>
+            <div class="actions">
+              <button id="check-devices" type="button" class="secondary">
+                检查主仓库与副本的磁盘关系</button
+              ><button id="vss-check" type="button" class="secondary">
+                只读 VSS 准备检查
+              </button>
+            </div>
+            <small>VSS 检查不创建影子副本，不提供数据库热备份。</small>
+          </details>
+          <button id="cancel-edit" type="button" class="secondary" hidden>
+            取消编辑
+          </button></template
+        >
+        <template id="history-template"
+          ><div class="form-grid filter-grid">
+            <label
+              >版本备注或快照 ID<input
+                id="history-query"
+                autocomplete="off" /></label
+            ><label>从（UTC 日期）<input id="history-from" type="date" /></label
+            ><label>到（UTC 日期）<input id="history-to" type="date" /></label
+            ><label
+              >单次操作预算（分钟）<input
+                id="operation-budget"
+                type="number"
+                min="1"
+                max="1440"
+                value="30"
+            /></label>
+          </div>
+          <div class="actions">
+            <button id="history-filter" type="button" class="secondary">
+              筛选历史</button
+            ><button id="history-prev" type="button" class="secondary">
+              前一页版本</button
+            ><span id="history-page">尚未读取</span
+            ><button id="history-next" type="button" class="secondary">
+              后一页版本
+            </button>
+          </div>
+          <details>
+            <summary>在所有历史版本中查找文件</summary>
+            <form id="history-search" class="inline">
+              <label
+                >文件名或相对路径片段<input
+                  id="search-name"
+                  required
+                  maxlength="200"
+                  autocomplete="off" /></label
+              ><button type="submit">搜索文件历史</button>
+            </form>
+            <div id="search-results"></div>
+            <button id="search-more" type="button" class="secondary" hidden>
+              继续搜索剩余历史
+            </button>
+          </details></template
+        >
+        <template id="catalog-template"
+          ><div class="inline">
+            <label
+              >筛选当前版本文件<input
+                id="file-filter"
+                maxlength="200"
+                autocomplete="off" /></label
+            ><button id="filter-files" type="button" class="secondary">
+              筛选文件
+            </button>
+          </div>
+          <p id="selection-count" class="muted">批量选择：0 项</p>
+          <details>
+            <summary>比较历史版本</summary>
+            <label>对比基准<select id="compare-before"></select></label
+            ><button id="compare" type="button" class="secondary">
+              与当前所选版本比较
+            </button>
+          </details>
+          <details>
+            <summary>安全文本预览（不执行文件）</summary>
+            <pre id="text-preview">
+从文件列表选择“文本预览”。仅支持不超过 128 KiB 的 UTF-8 文本。</pre
+            >
+          </details></template
+        >
+        <template id="restore-extra-template"
+          ><label class="check"
+            ><input id="restore-modes" type="checkbox" />显式恢复 POSIX
+            基础权限（Windows 不恢复 ACL；默认只恢复修改时间）</label
+          ><button id="open-restored" type="button" class="secondary" hidden>
+            打开恢复目录
+          </button></template
+        >
+        <footer>
+          MoonRestore · Apache-2.0 ·
+          保留源文件，保护恢复密钥。当前页面不代表公网服务或生产可靠性认证。
+        </footer>
+        <script type="module" src="/enhancements.js"></script>
+      </main>
+    </div>
+  </body>
+</html>

@@ -1,17 +1,45 @@
 // Independent registry consumer: no path/workspace override and no credentials output.
-import fs from 'node:fs';
-import path from 'node:path';
-import {fileURLToPath} from 'node:url';
-import {spawnSync} from 'node:child_process';
-import {moon,moonEnv,versionCheck} from './build.mjs';
-const version=process.argv[2]||'0.2.0';
-if(!/^\d+\.\d+\.\d+$/.test(version))throw new Error('Expected an explicit release version');
-const parent=fileURLToPath(new URL('../.local/',import.meta.url));fs.mkdirSync(parent,{recursive:true});
-const directory=fs.mkdtempSync(path.join(parent,'registry-consumer-'));
-const run=args=>{const r=spawnSync(moon,args,{cwd:directory,env:moonEnv,encoding:'utf8',shell:false,maxBuffer:8*1024*1024});if(r.status!==0)throw new Error('Registry consumer command failed: '+args.join(' ')+'\n'+r.stdout+'\n'+r.stderr);return r.stdout.trim();};
-fs.writeFileSync(path.join(directory,'moon.mod'),'name = "consumer/moonrestore_verification"\nversion = "0.0.0"\n');
-fs.writeFileSync(path.join(directory,'moon.pkg'),'import { "bzhangui/moonrestore/core" @backup, }\npkgtype(kind: "executable")\n');
-fs.writeFileSync(path.join(directory,'main.mbt'),`///|
+import fs from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+import { spawnSync } from "node:child_process";
+import { moon, moonEnv, versionCheck } from "./build.mjs";
+const version = process.argv[2] || "0.3.0";
+if (!/^\d+\.\d+\.\d+$/.test(version))
+  throw new Error("Expected an explicit release version");
+const parent = fileURLToPath(new URL("../.local/", import.meta.url));
+fs.mkdirSync(parent, { recursive: true });
+const directory = fs.mkdtempSync(path.join(parent, "registry-consumer-"));
+const run = (args) => {
+  const r = spawnSync(moon, args, {
+    cwd: directory,
+    env: moonEnv,
+    encoding: "utf8",
+    shell: false,
+    maxBuffer: 8 * 1024 * 1024,
+  });
+  if (r.status !== 0)
+    throw new Error(
+      "Registry consumer command failed: " +
+        args.join(" ") +
+        "\n" +
+        r.stdout +
+        "\n" +
+        r.stderr,
+    );
+  return r.stdout.trim();
+};
+fs.writeFileSync(
+  path.join(directory, "moon.mod"),
+  'name = "consumer/moonrestore_verification"\nversion = "0.0.0"\n',
+);
+fs.writeFileSync(
+  path.join(directory, "moon.pkg"),
+  'import { "bzhangui/moonrestore/core" @backup, }\npkgtype(kind: "executable")\n',
+);
+fs.writeFileSync(
+  path.join(directory, "main.mbt"),
+  `///|
 fn verify_integrity() -> Unit raise {
   assert_eq(@backup.digest(b"abc"), "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad")
   let bytes = b"independent registry consumer"
@@ -25,6 +53,10 @@ fn verify_integrity() -> Unit raise {
   }
   let text = snapshot.encode()
   assert_eq(@backup.decode_snapshot(text, @backup.text_digest(text)), snapshot)
+  assert_eq(@backup.select_entries(snapshot, ["sample.txt"]).length(), 1)
+  let metadata : Array[@backup.FileMetadata] = [{path:"sample.txt",mtime_ms:1700000000000L,mode:384}]
+  let extended = @backup.encode_with_metadata(snapshot, metadata)
+  assert_eq(@backup.decode_metadata(extended, @backup.text_digest(extended)), metadata)
 }
 
 ///|
@@ -48,12 +80,31 @@ test "published integrity API" { verify_integrity() }
 
 ///|
 test "published maintenance API" { verify_maintenance() }
-`);
-console.log(versionCheck());run(['update']);run(['add','bzhangui/moonrestore@'+version]);run(['fmt']);
-const targets=[];for(const target of ['js','wasm','wasm-gc','native']){
-  run(['check','--target',target,'--deny-warn']);run(['build','--target',target,'--release','--deny-warn']);
-  const output=run(['run','.','--target',target]);if(!output.includes('registry consumer verified'))throw new Error('Missing consumer assertion');
-  const tests=run(['test','--target',target,'--deny-warn']);targets.push({target,ok:true,output,tests});
+`,
+);
+console.log(versionCheck());
+run(["update"]);
+run(["add", "bzhangui/moonrestore@" + version]);
+run(["fmt"]);
+const targets = [];
+for (const target of ["js", "wasm", "wasm-gc", "native"]) {
+  run(["check", "--target", target, "--deny-warn"]);
+  run(["build", "--target", target, "--release", "--deny-warn"]);
+  const output = run(["run", ".", "--target", target]);
+  if (!output.includes("registry consumer verified"))
+    throw new Error("Missing consumer assertion");
+  const tests = run(["test", "--target", target, "--deny-warn"]);
+  targets.push({ target, ok: true, output, tests });
 }
-const report={module:'bzhangui/moonrestore',version,ok:true,independent_registry_download:true,targets};
-fs.writeFileSync(path.join(directory,'verification.json'),JSON.stringify(report,null,2));console.log(JSON.stringify(report,null,2));
+const report = {
+  module: "bzhangui/moonrestore",
+  version,
+  ok: true,
+  independent_registry_download: true,
+  targets,
+};
+fs.writeFileSync(
+  path.join(directory, "verification.json"),
+  JSON.stringify(report, null, 2),
+);
+console.log(JSON.stringify(report, null, 2));

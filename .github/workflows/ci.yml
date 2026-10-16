@@ -47,3 +47,6 @@ jobs:
           moon coverage report -p bzhangui/moonrestore/core -f summary
       - name: Validate portable package
         run: node scripts/package.mjs
+      - name: Compile native Windows launcher
+        if: runner.os == 'Windows'
+        run: node scripts/build-desktop.mjs

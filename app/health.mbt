@@ -92,3 +92,15 @@ pub fn retention_plan(
     "preview": true,
   }
 }
+
+///|
+pub fn selection_plan(id : String, selections : Array[String]) -> Json raise {
+  let entries = @core.select_entries(read_snapshot(id), selections)
+  let bytes = entries.fold(init=0L, fn(n, e) { n + e.size })
+  {
+    "ok": true,
+    "files": entries.filter(fn(e) { e.kind == "file" }).length(),
+    "bytes": Json(bytes),
+    "entries": entries.length(),
+  }
+}

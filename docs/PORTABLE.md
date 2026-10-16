@@ -1,6 +1,6 @@
-# MoonRestore 0.2.0 便携运行包
+# MoonRestore 0.3.0 运行包
 
-这是当前平台的已构建命令行程序，仍需安装 Node.js 22 或以上，不包含 Node 运行时。无需安装 MoonBit 或运行 npm install。不要把它称为无需任何依赖的 Windows EXE。
+普通便携包需外部 Node.js ≥22。若包含 `MoonRestore.exe` 和 `runtime/node.exe`，则为内置运行时的 Windows x64 桌面包，可双击 EXE，无需全局 Node/MoonBit，仍需 Windows .NET Framework 4.x。安装与回退见 `docs/DESKTOP.md`。两种包均无需运行 npm install，EXE 尚未代码签名。
 
 Windows 可双击 `开始使用.cmd`，或在此目录执行：
 

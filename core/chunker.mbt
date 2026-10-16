@@ -10,6 +10,12 @@ fn gear(byte : Byte) -> UInt32 {
 }
 
 ///|
+/// Fixed formula, precomputed once: preserve all existing chunk boundaries.
+let gear_table : FixedArray[UInt32] = FixedArray::makei(256, fn(i) {
+  gear(i.to_byte())
+})
+
+///|
 pub struct Chunker {
   config : ChunkConfig
   buffer : Array[Byte]
@@ -30,7 +36,7 @@ pub fn Chunker::push(self : Chunker, data : Bytes) -> Array[Bytes] {
   let output = []
   for byte in data {
     self.buffer.push(byte)
-    self.rolling = (self.rolling << 1) + gear(byte)
+    self.rolling = (self.rolling << 1) + gear_table[byte.to_int()]
     let n = self.buffer.length()
     if n >= self.config.max_size ||
       (

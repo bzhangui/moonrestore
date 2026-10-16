@@ -180,6 +180,7 @@ pub fn decode_snapshot(
   check_integer_fields(json)
   let snapshot : Snapshot = @json.from_json(json)
   snapshot.validate(limits~)
+  ignore(metadata_json(json, snapshot))
   snapshot
 }
 
@@ -272,8 +273,12 @@ pub fn diff(
   before : Snapshot,
   after : Snapshot,
 ) -> Array[Change] raise BackupError {
-  before.validate()
-  after.validate()
+  before.validate(
+    limits=if before.format == 3 { Limits::large() } else { Limits::default() },
+  )
+  after.validate(
+    limits=if after.format == 3 { Limits::large() } else { Limits::default() },
+  )
   let old : Map[String, Entry] = Map([])
   let current : Map[String, Entry] = Map([])
   for entry in before.entries {
