@@ -63,6 +63,9 @@ async function api(route, body) {
       "recovery-health",
       "scrub",
       "rebuild-copy",
+      "plan-run",
+      "operation-resume",
+      "restore-resumable",
     ].includes(route)
   ) {
     const minutes =

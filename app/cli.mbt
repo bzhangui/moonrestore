@@ -1,10 +1,20 @@
 ///|
 fn help() -> String {
   let text =
-    #|MoonRestore 0.4 — verifiable incremental backups
+    #|MoonRestore 0.5 — verifiable incremental backups
     #|Usage: node bin/moonrestore.mjs <command> ...
     #|  init <repository>                       Create a NEW repository
     #|  backup <repository> <source>             Backup a directory tree
+    #|  backup-resumable <repo> <source>         Durable verified file checkpoints
+    #|  restore-resumable <repo> <id> <NEW-target>  Verify prefix and full disk readback
+    #|  operation-status <repo> <UUID> | operation-resume <repo> <UUID> [--recover]
+    #|  plan-save <private-config.json> | plan-list | plan-status <UUID>
+    #|  plan-run <UUID> [--recover --restart --accept-anomaly]  Explicit flags only
+    #|  postgres-backup <repo> --database DB --user USER --pg-dump ABS --pg-restore ABS
+    #|  archive-export <repo> <NEW-archive> [--no-compress]
+    #|  archive-import <archive> <external-checksum> <NEW-repo>
+    #|  key-migrate <source-repo> <NEW-encrypted-repo>  Private destination password env
+    #|  providers                               Versioned built-in capabilities
     #|    --label <text> --exclude <relative>    Repeat exclude; exact path prefixes
     #|    --min <bytes> --avg <bytes> --max <bytes>  CDC tuning
     #|  list <repository>                       List validated snapshots
@@ -79,7 +89,28 @@ pub fn run(args : Array[String]) -> Unit raise {
     return
   }
   if args[0] == "version" {
-    println("MoonRestore 0.4.0")
+    println("MoonRestore 0.5.0")
+    return
+  }
+  if args[0] == "operation-transition" {
+    guard args.length() == 3 else {
+      raise @core.Invalid("expected two task states")
+    }
+    println(
+      ({ "ok": @core.operation_transition(args[1], args[2]) } : Json).stringify(),
+    )
+    return
+  }
+  if args[0] == "clock-guard" {
+    guard args.length() == 4 else {
+      raise @core.Invalid("expected clock bounds")
+    }
+    let previous : Int64 = @json.from_json(Json(args[1]))
+    let current : Int64 = @json.from_json(Json(args[2]))
+    let forward : Int64 = @json.from_json(Json(args[3]))
+    println(
+      ({ "ok": @core.clock_guard(previous, current, forward) } : Json).stringify(),
+    )
     return
   }
   if args[0] == "capacity-state" {

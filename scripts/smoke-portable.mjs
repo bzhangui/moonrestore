@@ -83,6 +83,46 @@ try {
     run(["sqlite-backup", repository, database]).post_restore_readback,
     true,
   );
+  const durable = run(["backup-resumable", repository, source]);
+  assert.equal(durable.state, "completed");
+  assert.equal(
+    run([
+      "restore-resumable",
+      repository,
+      durable.snapshot,
+      path.join(root, "durable-restore"),
+    ]).post_restore_readback,
+    true,
+  );
+  const archive = path.join(root, "archive"),
+    exported = run(["archive-export", repository, archive]),
+    imported = path.join(root, "imported");
+  assert.equal(
+    run(["archive-import", archive, exported.checksum, imported])
+      .destination_audited,
+    true,
+  );
+  const config = path.join(root, "private-config.json");
+  fs.writeFileSync(
+    config,
+    JSON.stringify({
+      name: "portable reliability",
+      type: "files",
+      repository,
+      source,
+      reserveBytes: 0,
+    }),
+  );
+  const plan = run(["plan-save", config]);
+  assert.equal(run(["plan-run", plan.id]).ok, true);
+  env.MOONRESTORE_DEST_PASSWORD = "synthetic-new-key-password";
+  const migrated = path.join(root, "new-key");
+  assert.equal(
+    run(["key-migrate", repository, migrated]).new_repository_key,
+    true,
+  );
+  env.MOONRESTORE_PASSWORD = env.MOONRESTORE_DEST_PASSWORD;
+  assert.equal(run(["verify", migrated, durable.snapshot]).ok, true);
   console.log(
     JSON.stringify({
       portable_runtime_smoke: true,
@@ -93,6 +133,10 @@ try {
       scrub_and_index: true,
       provider_lifecycle_rehearsal: true,
       packaged_sqlite_online_backup: true,
+      durable_backup_restore: true,
+      segmented_archive: true,
+      unified_plan: true,
+      new_key_migration: true,
     }),
   );
 } finally {

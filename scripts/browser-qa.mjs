@@ -287,10 +287,40 @@ try {
   await page.locator("#secure-key").fill("");
   await page.locator("#export-key-path").fill("");
   assert.equal(await page.evaluate(() => localStorage.length), 0);
+  // New reliable plan + durable restore, through real rendered forms.
+  await page
+    .locator("#durable-plan-form")
+    .evaluate((n) => (n.closest("details").open = true));
+  await page.locator("#durable-name").fill("浏览器受控可靠计划");
+  await page.locator("#durable-repository").fill(fixture.repository);
+  await page.locator("#durable-source").fill(fixture.source);
+  await page.locator("#durable-plan-form button[type=submit]").click();
+  await done();
+  await page
+    .locator("#durable-plans")
+    .getByRole("button", { name: "运行并验证" })
+    .click();
+  await done();
+  assert.equal((await result()).ok, true);
+  const durableSnapshot = (await result()).evidence.backup.snapshot;
+  await page
+    .locator("#durable-restore-form")
+    .evaluate((n) => (n.closest("details").open = true));
+  await page.locator("#durable-restore-repo").fill(fixture.repository);
+  await page.locator("#durable-restore-id").fill(durableSnapshot);
+  await page
+    .locator("#durable-restore-target")
+    .fill(path.join(path.dirname(fixtureFile), "durable-restored"));
+  await page.locator("#durable-restore-accept").check();
+  await page.locator("#durable-restore-form button[type=submit]").click();
+  await done();
+  assert.equal((await result()).post_restore_readback, true);
   await page.screenshot({
     path: path.join(resultDir, "desktop.png"),
     fullPage: true,
   });
+  await page.locator("#durable-operations").scrollIntoViewIfNeeded();
+  await page.screenshot({ path: path.join(resultDir, "durable-desktop.png") });
   await page.setViewportSize({ width: 390, height: 844 });
   assert.equal(
     await page.evaluate(
@@ -302,6 +332,8 @@ try {
     path: path.join(resultDir, "mobile.png"),
     fullPage: true,
   });
+  await page.locator("#durable-operations").scrollIntoViewIfNeeded();
+  await page.screenshot({ path: path.join(resultDir, "durable-mobile.png") });
   assert.deepEqual(errors, []);
   const report = {
     ok: true,
@@ -332,6 +364,8 @@ try {
       "read-only recovery with independent disk readback",
       "persistent scrub unknown to full-cycle health evidence",
       "key-free recovery checklist and rebuild consent invalidation",
+      "reliable plan create backup verify drill and separate evidence",
+      "durable complete restore with new target consent and disk readback",
     ],
     screenshot_files: ["desktop.png", "mobile.png"],
   };

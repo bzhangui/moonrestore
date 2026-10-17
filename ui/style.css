@@ -578,6 +578,56 @@ button.secondary:disabled {
 button:not(:disabled):active {
   transform: translateY(1px);
 }
+.durable-list {
+  margin-block: 1.4rem;
+}
+.durable-row {
+  display: grid;
+  grid-template-columns: minmax(10rem, 1fr) minmax(15rem, 2fr);
+  gap: 1rem 2rem;
+  padding: 1.3rem 0;
+  border-block-end: 1px solid var(--line);
+  font-variant-numeric: tabular-nums;
+}
+.durable-row strong,
+.durable-row small,
+.durable-row span {
+  display: block;
+  overflow-wrap: anywhere;
+}
+.durable-row small {
+  color: var(--muted);
+  margin-block-start: 0.5rem;
+}
+.durable-row span {
+  font-size: 0.8rem;
+  line-height: 1.8;
+}
+.durable-row button {
+  justify-self: start;
+}
+#durable-operations details {
+  padding-block: 1rem;
+  border-block-start: 1px solid var(--line);
+}
+#durable-operations summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+#durable-operations form {
+  margin-block-start: 1.2rem;
+}
+#durable-feedback {
+  padding-block: 1rem;
+  line-height: 1.7;
+  overflow-wrap: anywhere;
+}
+@media (max-width: 700px) {
+  .durable-row {
+    grid-template-columns: 1fr;
+    gap: 0.8rem;
+  }
+}
 @media (max-width: 700px) {
   .search-hit {
     align-items: stretch;

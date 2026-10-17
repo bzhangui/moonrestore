@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
+import {assertCleanupGuard}from './plans.mjs';
 import { checked, readPrivate, writePrivate, mkdirPrivate } from "./vault.mjs";
 import {
   core,
@@ -68,6 +69,7 @@ export async function previewPrune(
   repository,
   { keepLast = 10, daily = 7, weekly = 4, monthly = 12, protect = [] } = {},
 ) {
+  assertCleanupGuard(repository);
   const inventory = await validatedInventory(repository),
     args = [
       "retention-plan",
@@ -247,6 +249,7 @@ export function recoverMaintenance(repository, confirmation, { batch } = {}) {
   }
 }
 export function purgePreview(repository, batch, { now = Date.now() } = {}) {
+  assertCleanupGuard(repository,now);
   const { dir, record } = loadBatch(repository, batch);
   if (fs.existsSync(path.join(dir, "restored.json")))
     throw new Error("Quarantine was restored");

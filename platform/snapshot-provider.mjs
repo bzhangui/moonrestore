@@ -79,9 +79,15 @@ export async function backupWithSnapshotProvider(repository, source, provider) {
       try {
         await provider.release(lease);
       } catch {
-        failure = new Error(
+        const releaseFailure = new Error(
           "Snapshot lease release failed; inspect the provider-owned resource before retrying",
         );
+        if (failure)
+          failure = new AggregateError(
+            [failure, releaseFailure],
+            "Snapshot work and lease release both failed",
+          );
+        else failure = releaseFailure;
       }
   }
   if (failure) throw failure;

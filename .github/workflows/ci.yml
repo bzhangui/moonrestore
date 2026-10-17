@@ -9,6 +9,46 @@ concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 jobs:
+  postgres-integration:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: moonrestore_ci
+          POSTGRES_PASSWORD: synthetic-ci-only
+          POSTGRES_DB: moonrestore_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready --health-interval 5s
+          --health-timeout 5s --health-retries 10
+    env:
+      MOONRESTORE_PG_NATIVE: '1'
+      MOONRESTORE_PG_BIN: /usr/lib/postgresql/16/bin
+      PGHOST: 127.0.0.1
+      PGPORT: '5432'
+      PGUSER: moonrestore_ci
+      PGPASSWORD: synthetic-ci-only
+      PGDATABASE: moonrestore_ci
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
+        with:
+          node-version: '22'
+          package-manager-cache: false
+      - name: Install native PostgreSQL clients and MoonBit
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client-16
+          curl --fail --show-error --location https://cli.moonbitlang.com/install/unix.sh --output "$RUNNER_TEMP/install-moon.sh"
+          bash "$RUNNER_TEMP/install-moon.sh"
+          echo "$HOME/.moon/bin" >> "$GITHUB_PATH"
+      - run: node scripts/build.mjs
+      - run: node --test tests/postgres-native.test.mjs
   check-build-test:
     strategy:
       fail-fast: false

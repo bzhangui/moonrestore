@@ -4,7 +4,7 @@
 
 [公开源码](https://github.com/bzhangui/moonrestore) · [CI](https://github.com/bzhangui/moonrestore/actions) · [Mooncakes 正式版 0.3.0](https://mooncakes.io/docs/bzhangui/moonrestore) · [测试报告](docs/QUALITY_REPORT.md) · [更新记录](CHANGELOG.md)
 
-## 当前版本：0.4.0 源码升级
+## 当前版本：0.5.0 源码升级
 
 本轮只更新 GitHub，不发布 Mooncakes 新版本。正式版 `moon add bzhangui/moonrestore@0.3.0` 不包含本轮新增 API。[验收进度](docs/ACCEPTANCE.md) 与 [发布记录](docs/PUBLICATION.md) 区分本机、远端及历史结果。
 
@@ -19,8 +19,26 @@
 | SQLite | 在线导出单个主库、完整性检查、仓库校验和恢复演练；不保证多库事务一致性 |
 | S3 兼容副本 | 显式联网，仅加密源，SigV4、条件不覆盖写、读回校验、固定摘要下载；本机模拟通过，真实供应商待验证 |
 | 本机工作台 | 任务、历史、选择恢复、会话解锁、进度/取消、应急救援与健康证据；仅回环 |
+| 可靠任务与续作 | 私有身份绑定日志；备份文件级检查点、恢复前缀比对及发布后独立读回；取消/中断保留旧版本 |
+| 统一应用计划 | 文件/SQLite/PostgreSQL，分项证据、容量/源异常及清理保护；必须显式运行，不自动连接远端 |
+| 分段运输归档 | 有界页/段、可选压缩、外部固定根摘要，导入完整审计后新建仓库；不改 live 仓库格式 |
+| PostgreSQL | 单库 custom 导出、全归档展开检查及文件恢复演练；不是集群/PITR，不自动恢复生产库 |
 
-真实 VSS 请求器、分段清单/压缩新格式、备份/恢复的字节级续传尚未实现；巡检游标和对象级重试不能称为通用断点续传。独立介质、NAS、跨主机、断电、长期生产及外部用户仍待授权环境验证。
+真实 VSS 请求器、live 仓库分段清单和备份文件内部字节级续传尚未实现。运输归档分段不能冒称新 live 格式；文件级检查点和验证恢复前缀不能称通用备份字节续传。独立介质、NAS、跨主机、物理断电、长期生产及外部用户仍待授权环境验证。
+
+## 0.5 可靠性入口
+
+```sh
+node bin/moonrestore.mjs backup-resumable REPO SOURCE
+node bin/moonrestore.mjs operation-resume REPO UUID --recover
+node bin/moonrestore.mjs restore-resumable REPO SNAPSHOT_ID NEW_TARGET
+node bin/moonrestore.mjs plan-save PRIVATE_CONFIG_JSON
+node bin/moonrestore.mjs plan-run PLAN_UUID
+node bin/moonrestore.mjs archive-export REPO NEW_ARCHIVE
+node bin/moonrestore.mjs archive-import ARCHIVE EXTERNAL_CHECKSUM NEW_REPO
+```
+
+`--recover` 仅在原进程停止后使用。工作台新增计划、分项证据及续作/完整恢复入口；PostgreSQL、S3、运输归档和新密钥迁移的配置仍使用 CLI。详见 [可靠任务与离线归档](docs/RELIABILITY_0_5.md)、[三阶段实施边界](docs/THREE_STAGE_PLAN.md)。S3 429/短暂 5xx/明确网络中断有界重试，403/409、坏校验和与重定向不重试成功化。
 
 ## 安装与最小示例
 

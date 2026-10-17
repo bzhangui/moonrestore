@@ -15,6 +15,10 @@ Node built-in modules provide filesystem/process and standard crypto support.
 Version 0.4 also uses Node built-in fetch and node:sqlite online backup.
 S3 request orchestration is original project code validated with the public
 AWS SigV4 documentation vector; the AWS SDK is not embedded or copied.
+Version 0.5 uses Node built-in zlib for bounded transport-archive compression.
+PostgreSQL adapters invoke separately installed, user-trusted client tools;
+PostgreSQL binaries are not bundled. Protocol/documentation references are not
+source-code ports. Apache-2.0 applies to original project code, not upstream tools.
 The backup engine's content hashing uses the MoonBit crypto dependency.
 
 The original Windows launcher uses the OS-provided .NET Framework and Windows

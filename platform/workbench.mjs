@@ -39,6 +39,12 @@ import {
   recoveryHealth,
 } from "./recovery.mjs";
 import { randomUUID } from "node:crypto";
+import { savePlan, listPlans, runPlan } from "./plans.mjs";
+import {
+  createOperation,
+  runOperation,
+  operationStatus,
+} from "./operations.mjs";
 
 const ui = fileURLToPath(new URL("../ui/", import.meta.url));
 function object(value, allowed) {
@@ -143,6 +149,38 @@ export async function startWorkbench({
       case "recovery-health":
         object(p, ["repository", "maxAgeHours"]);
         return recoveryHealth(p.repository, { maxAgeHours: p.maxAgeHours });
+      case "plans":
+        object(p, []);
+        return listPlans();
+      case "plan-save":
+        return savePlan(p);
+      case "plan-run":
+        object(p, ["id", "recover", "acceptAnomaly"]);
+        return runPlan(p.id, {
+          recover: p.recover ?? false,
+          acceptAnomaly: p.acceptAnomaly ?? false,
+        });
+      case "operation-status":
+        object(p, ["repository", "id"]);
+        return { ...operationStatus(p.repository, p.id), ok: true };
+      case "operation-resume":
+        object(p, ["repository", "id", "recover"]);
+        if (p.recover !== undefined && typeof p.recover !== "boolean")
+          throw new Error("Strict recovery flag required");
+        return runOperation(p.repository, p.id, {
+          recover: p.recover === true,
+        });
+      case "restore-resumable": {
+        object(p, ["repository", "snapshot", "target", "confirmation"]);
+        if (p.confirmation !== p.target)
+          throw new Error("Explicit new target confirmation required");
+        const id = await createOperation({
+          repository: p.repository,
+          snapshot: p.snapshot,
+          target: p.target,
+        });
+        return runOperation(p.repository, id);
+      }
       case "scrub":
         object(p, ["repository", "maxFiles", "maxBytes", "snapshot"]);
         return scrub(p.repository, {
@@ -390,6 +428,12 @@ export async function startWorkbench({
     }
   };
   const routes = [
+    "plans",
+    "plan-save",
+    "plan-run",
+    "operation-status",
+    "operation-resume",
+    "restore-resumable",
     "emergency-list",
     "rescue-preview",
     "rescue-apply",
@@ -460,6 +504,7 @@ export async function startWorkbench({
         "/app.js",
         "/enhancements.js",
         "/recovery.js",
+        "/durable.js",
         "/style.css",
       ].includes(url.pathname)
     ) {
@@ -470,6 +515,7 @@ export async function startWorkbench({
           "/app.js": "app.js",
           "/enhancements.js": "enhancements.js",
           "/recovery.js": "recovery.js",
+          "/durable.js": "durable.js",
           "/style.css": "style.css",
         }[url.pathname],
       );

@@ -14,6 +14,8 @@ pub fn check_json_depth(String) -> Unit raise BackupError
 
 pub fn chunk(Bytes, config? : ChunkConfig) -> Array[Bytes] raise BackupError
 
+pub fn clock_guard(Int64, Int64, Int64) -> Bool raise
+
 pub fn decode_metadata(String, String, limits? : Limits) -> Array[FileMetadata] raise
 
 pub fn decode_snapshot(String, String, limits? : Limits) -> Snapshot raise
@@ -23,6 +25,8 @@ pub fn diff(Snapshot, Snapshot) -> Array[Change] raise BackupError
 pub fn digest(Bytes) -> String
 
 pub fn encode_with_metadata(Snapshot, Array[FileMetadata], limits? : Limits) -> String raise
+
+pub fn operation_transition(String, String) -> Bool
 
 pub fn path_order(String, String) -> Int
 
@@ -37,6 +41,8 @@ pub fn source_change_state(Int, Int, Bool, Int) -> Int raise BackupError
 pub fn text_digest(String) -> String
 
 pub fn valid_id(String) -> Bool
+
+pub fn validate_checkpoint_entry(Entry, ChunkConfig, Limits) -> Unit raise
 
 pub fn validate_path(String) -> Unit raise BackupError
 

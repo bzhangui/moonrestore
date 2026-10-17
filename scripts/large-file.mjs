@@ -6,6 +6,9 @@ import { spawn } from "node:child_process";
 import { createHash } from "node:crypto";
 import { performance } from "node:perf_hooks";
 import { cli, removeOwned, saveReport } from "../platform/maintenance.mjs";
+const durable = process.argv.includes("--durable-restore");
+if (process.argv.slice(2).some((a) => a !== "--durable-restore"))
+  throw new Error("Only --durable-restore is supported");
 const parent = fs.realpathSync(os.tmpdir()),
   space = fs.statfsSync(parent, { bigint: true });
 if (space.bavail * space.bsize < 6n * 1024n * 1024n * 1024n)
@@ -29,7 +32,11 @@ async function run(args) {
   const start = performance.now();
   const value = await new Promise((resolve, reject) => {
     active = spawn(process.execPath, [cli, ...args], {
-      env: { ...process.env, MOONRESTORE_PROFILE: "1" },
+      env: {
+        ...process.env,
+        MOONRESTORE_HOME: path.join(root, "state"),
+        MOONRESTORE_PROFILE: "1",
+      },
       windowsHide: true,
       shell: false,
     });
@@ -106,13 +113,18 @@ try {
   if (snapshot.logical_bytes !== String(size))
     throw new Error("Large size precision mismatch");
   await run(["verify", repo, snapshot.snapshot]);
-  await run(["restore", repo, snapshot.snapshot, target]);
+  await run([
+    durable ? "restore-resumable" : "restore",
+    repo,
+    snapshot.snapshot,
+    target,
+  ]);
   const actual = await digest(path.join(target, "large.bin")),
     expected = await digest(input);
   if (actual !== expected) throw new Error("Large restored file differs");
   const report = {
     format: 1,
-    version: "0.4.0",
+    version: "0.5.0",
     kind: "large_file_regression",
     ok: true,
     bytes: String(size),
@@ -121,6 +133,7 @@ try {
     controlled_sample: true,
     maximum_profile_scale_verified: false,
     production_soak: false,
+    durable_restore: durable,
   };
   console.log(
     JSON.stringify({ ...report, files: saveReport(report) }, null, 2),

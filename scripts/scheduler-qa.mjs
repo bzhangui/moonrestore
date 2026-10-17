@@ -60,7 +60,7 @@ try {
     throw new Error("Scheduled backup did not finish successfully");
   const report = {
     format: 1,
-    version: "0.4.0",
+    version: "0.5.0",
     kind: "windows_scheduler_roundtrip",
     ok: true,
     current_user: true,

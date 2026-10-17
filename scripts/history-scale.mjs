@@ -86,7 +86,7 @@ try {
   assert.equal(batches, 5);
   const report = {
     ok: true,
-    version: "0.4.0",
+    version: "0.5.0",
     kind: "history_scale",
     controlled_sample: true,
     production_benchmark: false,

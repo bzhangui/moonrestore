@@ -11,16 +11,17 @@
     <a class="skip" href="#main">跳到主要内容</a>
     <div class="shell">
       <aside>
-        <div class="brand">MoonRestore<span>本机备份工作台 · 0.4</span></div>
+        <div class="brand">MoonRestore<span>本机备份工作台 · 0.5</span></div>
         <nav aria-label="主导航">
           <a href="#overview">任务概览</a><a href="#setup">配置备份</a
           ><a href="#versions">版本与恢复</a><a href="#evidence">校验与演练</a
-          ><a href="#recovery">应急救援与健康</a>
+          ><a href="#recovery">应急救援与健康</a
+          ><a href="#durable-operations">可靠任务与续作</a>
         </nav>
         <div class="boundary">
           <strong>你的文件，留在本机。</strong>
           <p>
-            不上传资料，不连接云账户。独立副本和定期恢复演练，才是重要资料保护的一部分。
+            默认仅本机运行；远端副本须单独配置和授权。独立副本和定期恢复演练，才是重要资料保护的一部分。
           </p>
           <span id="connection">正在检查本机会话</span>
         </div>
@@ -615,12 +616,127 @@
             </details>
           </div>
         </section>
+        <section
+          id="durable-operations"
+          class="panel"
+          aria-labelledby="durable-heading"
+        >
+          <div class="section-title">
+            <div>
+              <p class="eyebrow">可靠任务 · 本机私有记录</p>
+              <h2 id="durable-heading">有中断，也有下一步</h2>
+            </div>
+            <button id="plans-refresh" type="button" class="secondary">
+              刷新计划
+            </button>
+          </div>
+          <p class="muted">
+            每次计划分别记录备份、校验、恢复演练和副本证据。失败不抹掉上一次成功记录；恢复始终写入新目录。
+          </p>
+          <div id="durable-plans" class="durable-list" aria-live="polite">
+            <p>还未读取计划。点击“刷新计划”，或在下方创建首个计划。</p>
+          </div>
+          <details>
+            <summary>创建文件或 SQLite 计划</summary>
+            <form id="durable-plan-form" class="form-grid">
+              <label
+                >计划名称<input
+                  id="durable-name"
+                  required
+                  maxlength="100"
+                  autocomplete="off"
+              /></label>
+              <label
+                >备份方式<select id="durable-type">
+                  <option value="files">普通文件夹</option>
+                  <option value="sqlite">SQLite 在线一致性导出</option>
+                </select></label
+              >
+              <label
+                >仓库路径<input
+                  id="durable-repository"
+                  required
+                  autocomplete="off"
+              /></label>
+              <label
+                >源目录 / SQLite 文件<input
+                  id="durable-source"
+                  required
+                  autocomplete="off"
+              /></label>
+              <p class="muted">
+                不会保存密码，不自动定时运行。新计划启用清理保护；一次完整计划通过后才解除。PostgreSQL
+                和远端配置使用 CLI。
+              </p>
+              <button type="submit">保存计划</button>
+            </form>
+          </details>
+          <details>
+            <summary>中断任务续作</summary>
+            <form id="durable-resume-form" class="form-grid">
+              <label
+                >原仓库路径<input
+                  id="resume-repository"
+                  required
+                  autocomplete="off" /></label
+              ><label
+                >操作 ID<input
+                  id="resume-id"
+                  required
+                  autocomplete="off"
+                  placeholder="失败结果中的 UUID"
+              /></label>
+              <label class="check"
+                ><input
+                  id="resume-recover"
+                  type="checkbox"
+                />原进程已停止；允许核验并恢复该操作自己的失效锁</label
+              >
+              <button id="resume-status" type="button" class="secondary">
+                检查状态</button
+              ><button type="submit">验证并续作</button>
+            </form>
+          </details>
+          <details>
+            <summary>可续作的完整恢复</summary>
+            <form id="durable-restore-form" class="form-grid">
+              <label
+                >仓库路径<input
+                  id="durable-restore-repo"
+                  required
+                  autocomplete="off" /></label
+              ><label
+                >完整快照 ID<input
+                  id="durable-restore-id"
+                  required
+                  pattern="[a-f0-9]{64}"
+                  autocomplete="off" /></label
+              ><label
+                >全新目标目录<input
+                  id="durable-restore-target"
+                  required
+                  autocomplete="off"
+              /></label>
+              <label class="check"
+                ><input
+                  id="durable-restore-accept"
+                  type="checkbox"
+                  required
+                />确认新建此目录，不覆盖原资料；暂存文件会保留到验证完成</label
+              ><button type="submit">完整校验后恢复</button>
+            </form>
+          </details>
+          <p id="durable-feedback" class="muted" role="status">
+            尚未执行。此处显示的是本机证据，不代表跨设备或生产环境验证。
+          </p>
+        </section>
         <footer>
           MoonRestore · Apache-2.0 ·
           保留源文件，保护恢复密钥。当前页面不代表公网服务或生产可靠性认证。
         </footer>
         <script type="module" src="/enhancements.js"></script>
         <script type="module" src="/recovery.js"></script>
+        <script type="module" src="/durable.js"></script>
       </main>
     </div>
   </body>

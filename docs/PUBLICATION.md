@@ -1,5 +1,9 @@
 # 发布核验记录
 
+## 0.5.0 源码升级（不发布 Mooncakes）
+
+用户授权测试及隐私检查后推送 bzhangui/moonrestore main，明确“暂不发布 Mooncakes”。本轮不执行 moon publish、不上传本地运行包或私人申报书/原始报告。新功能及未完成边界见 RELIABILITY_0_5、THREE_STAGE_PLAN；精确提交与 CI 状态在核验后补录，不沿用旧提交成功结果。
+
 ## 0.4.0 源码升级（本轮不发布 Mooncakes）
 
 用户明确授权测试和隐私检查后推送 GitHub main，明确选择真实 S3/VSS/跨主机先做受控适配。正式注册表仍为 0.3.0，本轮未执行 moon publish，也不发布运行包附件。新 API 只能使用对应源码/本地构建，不能将注册表旧包混同为最新版。

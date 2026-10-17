@@ -1,6 +1,7 @@
 // Bounded path-style S3 adapter. No delete API; no credential strings in reports.
 import { createHash, createHmac } from "node:crypto";
 import { activity, checkpoint } from "./activity.mjs";
+import { setTimeout as delay } from "node:timers/promises";
 const sha = (b) => createHash("sha256").update(b).digest("hex");
 const hmac = (key, text) => createHmac("sha256", key).update(text).digest();
 const encode = (s) =>
@@ -84,6 +85,8 @@ export class S3Backend {
     totalMs = 1800000,
     retentionDays = 0,
     allowRetention = false,
+    maxAttempts = 4,
+    retryBaseMs = 100,
   }) {
     const u = new URL(endpoint),
       local = ["127.0.0.1", "localhost", "[::1]"].includes(u.hostname);
@@ -117,6 +120,12 @@ export class S3Backend {
     )
       throw new Error("Invalid S3 configuration or credentials");
     if (
+      !Number.isInteger(maxAttempts) ||
+      maxAttempts < 1 ||
+      maxAttempts > 8 ||
+      !Number.isInteger(retryBaseMs) ||
+      retryBaseMs < 1 ||
+      retryBaseMs > 5000 ||
       !Number.isInteger(timeoutMs) ||
       timeoutMs < 100 ||
       timeoutMs > 30000 ||
@@ -138,6 +147,10 @@ export class S3Backend {
       sessionToken,
     };
     this.timeoutMs = timeoutMs;
+    this.maxAttempts = maxAttempts;
+    this.retryBaseMs = retryBaseMs;
+    this.attempts = 0;
+    this.retries = 0;
     this.deadline = Date.now() + totalMs;
     this.retainUntil = retentionDays
       ? new Date(Date.now() + retentionDays * 86400000).toISOString()
@@ -173,40 +186,82 @@ export class S3Backend {
         key.split("/").map(encode).join("/"),
     );
     if (version) u.searchParams.set("versionId", version);
-    const remaining = Math.min(this.timeoutMs, this.deadline - Date.now());
-    if (remaining <= 0) throw new Error("S3 total deadline");
-    const signals = [AbortSignal.timeout(remaining)];
-    if (activity()?.signal) signals.push(activity().signal);
-    try {
-      const response = await fetch(u, {
-        method,
-        headers: signS3Request({
-          ...this.config,
+    // PUT retries remain conditional: a lost success response becomes 412 and
+    // is resolved only by checksum-verified GET. Never retry 403/409/corruption.
+    if (method === "PUT" && headers["if-none-match"] !== "*")
+      throw new Error("Only conditional PUT is allowed");
+    for (let attempt = 1; attempt <= this.maxAttempts; attempt++) {
+      checkpoint("s3_attempt");
+      const remaining = Math.min(this.timeoutMs, this.deadline - Date.now());
+      if (remaining <= 0) throw new Error("S3 total deadline");
+      const signals = [AbortSignal.timeout(remaining)];
+      if (activity()?.signal) signals.push(activity().signal);
+      let retryAfter = 0,
+        transient = false;
+      try {
+        this.attempts++;
+        const response = await fetch(u, {
           method,
-          url: u.href,
-          body,
-          headers,
-        }),
-        ...(method === "PUT" ? { body } : {}),
-        redirect: "error",
-        signal: AbortSignal.any(signals),
-      });
-      let size = 0;
-      const chunks = [];
-      for await (const chunk of response.body || []) {
-        size += chunk.length;
-        if (size > 33554496) throw new Error();
-        chunks.push(chunk);
+          headers: signS3Request({
+            ...this.config,
+            method,
+            url: u.href,
+            body,
+            headers,
+          }),
+          ...(method === "PUT" ? { body } : {}),
+          redirect: "error",
+          signal: AbortSignal.any(signals),
+        });
+        let size = 0;
+        const chunks = [];
+        for await (const chunk of response.body || []) {
+          size += chunk.length;
+          if (size > 33554496) throw new Error();
+          chunks.push(chunk);
+        }
+        if ([429, 500, 502, 503, 504].includes(response.status)) {
+          transient = true;
+          const raw = response.headers.get("retry-after");
+          retryAfter = /^\d+$/.test(raw || "")
+            ? Number(raw) * 1000
+            : Math.max(0, Date.parse(raw) - Date.now()) || 0;
+        } else
+          return {
+            status: response.status,
+            headers: response.headers,
+            bytes: Buffer.concat(chunks),
+          };
+      } catch (error) {
+        // Budget violations are permanent, not transient network conditions.
+        transient =
+          error.name === "TimeoutError" ||
+          [
+            "ECONNRESET",
+            "ECONNREFUSED",
+            "ETIMEDOUT",
+            "EAI_AGAIN",
+            "UND_ERR_CONNECT_TIMEOUT",
+            "UND_ERR_SOCKET",
+          ].includes(error.cause?.code);
+        if (!transient)
+          throw new Error(
+            "S3 request failed, rejected or exceeded its budget (details hidden)",
+          );
       }
-      return {
-        status: response.status,
-        headers: response.headers,
-        bytes: Buffer.concat(chunks),
-      };
-    } catch {
-      throw new Error(
-        "S3 request failed, timed out or exceeded its budget (details hidden)",
+      if (!transient || attempt === this.maxAttempts)
+        throw new Error(
+          "S3 request failed: transient retry budget exhausted (details hidden)",
+        );
+      const wait = Math.max(
+        Math.min(retryAfter, 30000),
+        Math.min(5000, this.retryBaseMs * 2 ** (attempt - 1)) *
+          (0.75 + Math.random() * 0.5),
       );
+      if (wait >= this.deadline - Date.now())
+        throw new Error("S3 total deadline before retry");
+      this.retries++;
+      await delay(Math.ceil(wait), undefined, { signal: activity()?.signal });
     }
   }
   async get(key, { version, checksum } = {}) {

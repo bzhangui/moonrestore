@@ -12,6 +12,15 @@ import { applicationCommand } from "../platform/applications.mjs";
 import { indexCommand } from "../platform/search-index.mjs";
 import { remoteCommand } from "../platform/remote.mjs";
 import { providerCommand } from "../platform/snapshot-provider.mjs";
+import {
+  operationCommand,
+  DurableBackupHost,
+  DurableRecoverySession,
+} from "../platform/operations.mjs";
+import { Journal } from "../platform/journal.mjs";
+import { postgresCommand } from "../platform/postgresql.mjs";
+import { archiveCommand } from "../platform/archive.mjs";
+import { planCommand } from "../platform/plans.mjs";
 if (process.env.MOONRESTORE_INTERNAL !== "1" && process.argv[2] === "--home") {
   if (!process.argv[3])
     throw new Error("--home requires a private state directory");
@@ -22,6 +31,10 @@ if (process.env.MOONRESTORE_INTERNAL !== "1") {
   try {
     const args = process.argv.slice(2);
     const result =
+      (await operationCommand(args)) ??
+      (await postgresCommand(args)) ??
+      (await archiveCommand(args)) ??
+      (await planCommand(args)) ??
       (await advanced(args)) ??
       (await recoveryCommand(args)) ??
       (await applicationCommand(args)) ??
@@ -41,9 +54,33 @@ if (process.env.MOONRESTORE_INTERNAL !== "1") {
     process.exit(1);
   }
 }
-const host =
-  process.env.MOONRESTORE_RECOVERY_TARGET &&
+let durableKind;
+if (
+  process.env.MOONRESTORE_OPERATION_ID &&
   process.env.MOONRESTORE_INTERNAL === "1"
+) {
+  const journal = new Journal(
+    process.argv[3],
+    process.env.MOONRESTORE_OPERATION_ID,
+  );
+  try {
+    durableKind = journal.load().kind;
+  } finally {
+    journal.close();
+  }
+}
+const host = durableKind
+  ? durableKind === "backup"
+    ? new DurableBackupHost(
+        process.argv[3],
+        process.env.MOONRESTORE_OPERATION_ID,
+      )
+    : new DurableRecoverySession(
+        process.argv[3],
+        process.env.MOONRESTORE_OPERATION_ID,
+      )
+  : process.env.MOONRESTORE_RECOVERY_TARGET &&
+      process.env.MOONRESTORE_INTERNAL === "1"
     ? new RecoverySession({
         repository: process.argv[3],
         target: process.env.MOONRESTORE_RECOVERY_TARGET,

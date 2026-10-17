@@ -45,6 +45,7 @@ export class RecoverySession {
     this.stage = null;
     this.file = null;
     this.files = [];
+    this.directories = new Set();
     this.total = 0n;
   }
   get bytes() {
@@ -82,6 +83,7 @@ export class RecoverySession {
       checked(path.join(this.stage, safeRelative(name)), false);
     if (op === "restore_dir") {
       fs.mkdirSync(member(value.path), { mode: 0o700 });
+      this.directories.add(value.path);
       return null;
     }
     if (op === "restore_open") {
@@ -124,6 +126,33 @@ export class RecoverySession {
     if (op === "finish_restore") {
       if (this.file || fs.existsSync(this.target))
         throw new Error("Recovery target publication refused");
+      const expected = new Set([
+        ...this.directories,
+        ...this.files.map((f) => f.name),
+      ]);
+      let visited = 0;
+      const inspect = (dir, prefix = "") => {
+        const iterator = fs.opendirSync(checked(dir));
+        try {
+          for (let d = iterator.readSync(); d; d = iterator.readSync()) {
+            const name = prefix ? prefix + "/" + d.name : d.name,
+              p = member(name),
+              s = fs.lstatSync(p);
+            if (
+              !expected.has(name) ||
+              this.directories.has(name) !== s.isDirectory() ||
+              ++visited > 100000
+            )
+              throw new Error("Recovery readback tree mismatch");
+            if (s.isDirectory()) inspect(p, name);
+          }
+        } finally {
+          iterator.closeSync();
+        }
+      };
+      inspect(this.stage);
+      if (visited !== expected.size)
+        throw new Error("Recovery readback tree incomplete");
       const buffer = Buffer.alloc(65536);
       for (const file of this.files) {
         const name = member(file.name),

@@ -47,6 +47,12 @@ pub fn backup(
     }),
   }
   placeholder.validate(limits~)
+  io_unit("checkpoint_prepare", {
+    "source": source,
+    "label": label,
+    "excludes": Json(excludes),
+    "config": config.to_json(),
+  })
   let entries : Array[@core.Entry] = []
   let mut total = 0L
   let mut stored = 0L
@@ -61,6 +67,41 @@ pub fn backup(
         hash: "",
         chunks: [],
       })
+      continue
+    }
+    let cached = io("checkpoint_get", { "path": item.path })
+    if cached != Json::null() {
+      let entry : @core.Entry = @json.from_json(cached)
+      @core.validate_checkpoint_entry(entry, config, limits)
+      guard entry.path == item.path && entry.size == item.size else {
+        raise @core.Invalid("checkpoint source changed")
+      }
+      verify_entry(entry, false)
+      io_unit("open_source", { "path": item.path })
+      let observed = @core.Hasher::new()
+      let mut actual = 0L
+      while true {
+        io_unit("read_source", { "max": 65536 })
+        let block = returned_bytes()
+        if block.is_empty() {
+          break
+        }
+        actual += block.length().to_int64()
+        observed.update(block)
+      }
+      io_unit("close_source", Json::null())
+      guard actual == entry.size && observed.finish() == entry.hash else {
+        raise @core.Invalid(
+          "checkpoint source content changed; start a new operation",
+        )
+      }
+      chunk_count += entry.chunks.length()
+      total += entry.size
+      guard chunk_count <= limits.max_chunks && total <= limits.max_total_bytes else {
+        raise @core.Invalid("checkpoint budget")
+      }
+      reused += entry.size
+      entries.push(entry)
       continue
     }
     io_unit("open_source", { "path": item.path })
@@ -112,13 +153,15 @@ pub fn backup(
     guard total <= limits.max_total_bytes else {
       raise @core.Invalid("total byte limit exceeded")
     }
-    entries.push({
+    let entry : @core.Entry = {
       path: item.path,
       kind: "file",
       size,
       hash: hash.finish(),
       chunks: parts,
-    })
+    }
+    entries.push(entry)
+    io_unit("checkpoint_put", entry.to_json())
   }
   io_unit("check_source", Json::null())
   let created : String = @json.from_json(io("clock", Json::null()))

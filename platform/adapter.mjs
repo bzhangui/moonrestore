@@ -419,6 +419,11 @@ export class Host {
       throw new Error("Read-only repository session");
     if (!["unlock", "recover"].includes(op)) this.pulse(op);
     switch (op) {
+      case "checkpoint_prepare":
+      case "checkpoint_get":
+      case "checkpoint_put":
+        this.requireLock();
+        return null; // Ordinary operations remain stateless.
       case "init": {
         const encrypted = this.environment.MOONRESTORE_INIT_ENCRYPTED === "1";
         const large = this.environment.MOONRESTORE_INIT_LARGE === "1";

@@ -56,11 +56,18 @@ const files = [
   "platform/s3.mjs",
   "platform/remote.mjs",
   "platform/snapshot-provider.mjs",
+  "platform/contracts.mjs",
+  "platform/journal.mjs",
+  "platform/operations.mjs",
+  "platform/postgresql.mjs",
+  "platform/archive.mjs",
+  "platform/plans.mjs",
   "ui/index.html",
   "ui/style.css",
   "ui/app.js",
   "ui/enhancements.js",
   "ui/recovery.js",
+  "ui/durable.js",
   "_build/js/release/build/cmd/main/main.js",
   "examples/demo.mjs",
   "examples/scenarios.mjs",
@@ -78,6 +85,7 @@ const files = [
   "docs/RECOVERY_0_4.md",
   "docs/APPLICATIONS.md",
   "docs/REMOTE.md",
+  "docs/RELIABILITY_0_5.md",
 ];
 if (process.platform !== "win32") files.push("_build/host/rename_noreplace");
 if (embedded)
