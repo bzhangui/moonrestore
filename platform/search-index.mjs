@@ -14,6 +14,22 @@ import {
 } from "./vault.mjs";
 import { checkpoint, credentials } from "./activity.mjs";
 const kind = "search-index-v1";
+// A nested/repeated Base64 regexp over multi-MiB strings can exhaust V8's
+// regexp stack. Canonical roundtrip is linear and also rejects ignored bytes,
+// missing padding and non-zero unused padding bits in Buffer's tolerant decoder.
+export function decodeIndexPayload(payload) {
+  const max = 16777216 + 64;
+  if (
+    typeof payload !== "string" ||
+    payload.length % 4 !== 0 ||
+    payload.length > Math.ceil(max / 3) * 4
+  )
+    throw new Error("Invalid search index Base64 payload");
+  const bytes = Buffer.from(payload, "base64");
+  if (bytes.length > max || bytes.toString("base64") !== payload)
+    throw new Error("Invalid search index Base64 payload");
+  return bytes;
+}
 const readonly = {
   MOONRESTORE_READ_ONLY: "1",
   MOONRESTORE_RECOVERY_TARGET: "",
@@ -115,10 +131,7 @@ export async function searchIndex(repository, query, { offset = 0 } = {}) {
     typeof record.encrypted !== "boolean" ||
     !/^[a-f0-9]{64}$/.test(record.content) ||
     !/^[a-f0-9]{64}$/.test(record.physical) ||
-    typeof record.payload !== "string" ||
-    !/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(
-      record.payload,
-    )
+    typeof record.payload !== "string"
   )
     throw new Error("Search index is invalid or stale; rebuild it");
   const host = openHost(repository, {
@@ -127,7 +140,7 @@ export async function searchIndex(repository, query, { offset = 0 } = {}) {
   try {
     if (!!host.key !== record.encrypted)
       throw new Error("Search index encryption mismatch");
-    let data = Buffer.from(record.payload, "base64");
+    let data = decodeIndexPayload(record.payload);
     if (record.encrypted)
       data = unseal(host.key, host.vault, kind, record.physical, data).bytes;
     if (

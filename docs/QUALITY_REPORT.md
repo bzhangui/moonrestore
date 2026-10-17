@@ -7,7 +7,7 @@
 | 检查 | 实测结果和范围 |
 | --- | --- |
 | 四目标 | 24 个不同核心用例在 JS/Wasm/Wasm-GC/Native 各通过一次，共 96 次执行；check/build/test、核心示例、fmt、deny-warn 通过 |
-| Node/HTTP 全量 | 最后全量 93 项通过，0 失败/跳过；早期原工作台文件在基线并行跑失败一次，隔离复跑与两轮全量均通过，没有跳过或放宽门禁。新增末次参数校验后恢复/HTTP 专项 14 项再通过 |
+| Node/HTTP 全量 | 最后全量 94 项通过，0 失败/跳过，包含末次大索引修复；早期原工作台文件在基线并行跑失败一次，隔离复跑与后续全量均通过，没有跳过或放宽门禁。参数校验后恢复/HTTP 专项 14 项也单独通过 |
 | 核心覆盖率 | 411/444，约 92.57%；新增 recovery 27/28。仅 core，不是全产品行/分支覆盖率 |
 | 救援与重建 | 严格只读操作拒绝、部分恢复、新目标抢占、写后磁盘篡改、源树不变、失效确认、主清单损坏、双边坏对象拒绝、不同密钥供体/新密钥重建、禁止加密降级 |
 | 持久巡检/索引 | 不完整周期不报全量通过、失败保留、过期/损坏状态拒绿、同路径仓库替换证据失效、超小/非法预算拒绝；索引变化失效/损坏拒绝、加密名称隐藏与密钥门禁 |
@@ -23,6 +23,8 @@
 | 隐私与发布 | Mooncakes 包列表门禁通过；私人申报书/报告、数据、密钥、SDK/运行时缓存不在公开源码或发布清单。本轮只 GitHub、不执行 moon publish |
 
 远端 f7453db 对应三平台 CI 38998994913 已全部成功，后续 CI action 运行时维护单列 PUBLICATION。最终包额外验证实际调用包内 SQLite worker、备份及恢复读回；不是只检查该文件存在。
+
+最终边界复核另复现索引旧 Base64 正则在 8/16 MiB 合法载荷触发 RangeError；已改用有预算的解码与规范编码回比，并保留 SHA/认证校验。新增专门载荷解析回归（不是伪造 16 MiB 真实历史），覆盖 1/8/16 MiB、密文开销边界、超限/非规范 padding/非法字符。补丁后重新执行完整四目标及 94 项 Node/HTTP、三场景、411/444 core 覆盖率和包隐私门禁全部通过；重新生成 52 文件内置运行时包，包内 SQLite/救援/巡检/索引冒烟及无全局 Node 原生宿主检查通过。此前远端 93 项记录属于补丁前提交，最新精确提交以 Actions 结果为准。
 
 复现入口：scripts/validate.mjs、scripts/repeat.mjs 3 120、scripts/history-scale.mjs、scripts/large-file.mjs、scripts/compatibility-qa.mjs OLD_0_2_BUNDLE、scripts/package.mjs、scripts/package-desktop.mjs、scripts/desktop-qa.mjs DESKTOP_BUNDLE。浏览器：另行安装 Playwright，先启动 scripts/ui-pilot.mjs，再运行 scripts/browser-qa.mjs SESSION_FILE；停止只清理本次合成夹具。各规模报告/密钥/原始日志不提交。
 

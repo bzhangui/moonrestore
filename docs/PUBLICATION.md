@@ -4,13 +4,14 @@
 
 用户明确授权测试和隐私检查后推送 GitHub main，明确选择真实 S3/VSS/跨主机先做受控适配。正式注册表仍为 0.3.0，本轮未执行 moon publish，也不发布运行包附件。新 API 只能使用对应源码/本地构建，不能将注册表旧包混同为最新版。
 
-本轮最终本机完整回归 93 项 Node/HTTP、24 核心用例 × 四目标、411/444 core 覆盖率；真实浏览器、规模/大文件/重复恢复、真实旧版兼容及独立本地运行包通过，具体见 QUALITY_REPORT。远端本轮状态在推送后记录，不把旧版本 CI 当作新提交通过。私人申报书、备份、密钥、SDK、运行报告和本机安装状态排除。
+本轮最终本机完整回归 94 项 Node/HTTP、24 核心用例 × 四目标、411/444 core 覆盖率；真实浏览器、规模/大文件/重复恢复、真实旧版兼容及独立本地运行包通过，具体见 QUALITY_REPORT。远端本轮状态在推送后记录，不把旧版本 CI 当作新提交通过。私人申报书、备份、密钥、SDK、运行报告和本机安装状态排除。
 
 - 功能提交 bc14c69、验证说明提交 f7453db 已推送公开 main；本地、ls-remote、GitHub API 的精确 SHA 一致，匿名仓库页面 HTTP 200，公开树无私人申报书/本地状态/密钥路径。
 - [CI 38998994913](https://github.com/bzhangui/moonrestore/actions/runs/38998994913) 对 f7453dbaacdaa40d0dc74c08ae12a5636eeb9adf 的 Windows/Ubuntu/macOS 全部成功，包含最终源码及新包内 SQLite 冒烟。
 - 注册表只读核对 latest_version 仍为 0.3.0，未撤回、原哈希不变；0.4.0 未发布。新源码不冒充正式注册表包。
 - 本地最终桌面包 52 文件，官方 Node v24.15.0；最终包 SQLite 在线导出/读回与无全局 Node 的原生宿主检查通过。不上传包、运行状态或原始报告。
 - CI 发现旧 action 的 Node 20 弃用提示，后续维护将 checkout 固定至官方 v7.0.1 SHA、setup-node 固定至 v7.1.0 SHA（两者 action 运行时 Node 24），关闭检出凭据持久化与自动 npm 缓存；项目本身仍以 Node 22 测试。此 CI 维护不改变仓库数据格式；对应新运行以 Actions 为准。
+- 末次边界复核修复大索引 Base64 正则栈溢出，补丁后全量 94 项本机回归通过，并重新打包/验证；下方 f7453db 的 93 项远端记录不能冒充该补丁的 CI。最新提交的检查/构建/测试/包结果在 [Actions](https://github.com/bzhangui/moonrestore/actions/workflows/ci.yml) 按精确 SHA 核对，本轮仍不发布注册表版本。
 
 ## 0.3.1 GitHub 补丁，未发布 Mooncakes
 

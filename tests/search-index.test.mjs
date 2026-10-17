@@ -3,8 +3,27 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 import { fixture, put, backup, call, tree } from "./helpers.mjs";
-import { buildSearchIndex, searchIndex } from "../platform/search-index.mjs";
+import {
+  buildSearchIndex,
+  searchIndex,
+  decodeIndexPayload,
+} from "../platform/search-index.mjs";
 import { withCredentials } from "../platform/activity.mjs";
+
+test("bounded canonical Base64 decoding handles 8/16 MiB payloads without a regexp stack and rejects malformed encodings", () => {
+  for (const size of [1048576, 8388608, 16777216, 16777280]) {
+    const expected = Buffer.alloc(size, 0xa5),
+      actual = decodeIndexPayload(expected.toString("base64"));
+    assert.equal(actual.length, size);
+    assert.equal(actual.compare(expected), 0);
+  }
+  for (const input of [null, {}, "@@@@", "AQ", "AQ==\n", "AR==", "AA===="])
+    assert.throws(() => decodeIndexPayload(input), /Base64/);
+  assert.throws(
+    () => decodeIndexPayload(Buffer.alloc(16777281).toString("base64")),
+    /Base64/,
+  );
+});
 
 test("disposable index searches validated history and refuses stale or corrupted cache", async () => {
   const f = fixture(),
