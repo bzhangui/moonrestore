@@ -6,6 +6,12 @@
 
 本轮最终本机完整回归 93 项 Node/HTTP、24 核心用例 × 四目标、411/444 core 覆盖率；真实浏览器、规模/大文件/重复恢复、真实旧版兼容及独立本地运行包通过，具体见 QUALITY_REPORT。远端本轮状态在推送后记录，不把旧版本 CI 当作新提交通过。私人申报书、备份、密钥、SDK、运行报告和本机安装状态排除。
 
+- 功能提交 bc14c69、验证说明提交 f7453db 已推送公开 main；本地、ls-remote、GitHub API 的精确 SHA 一致，匿名仓库页面 HTTP 200，公开树无私人申报书/本地状态/密钥路径。
+- [CI 38998994913](https://github.com/bzhangui/moonrestore/actions/runs/38998994913) 对 f7453dbaacdaa40d0dc74c08ae12a5636eeb9adf 的 Windows/Ubuntu/macOS 全部成功，包含最终源码及新包内 SQLite 冒烟。
+- 注册表只读核对 latest_version 仍为 0.3.0，未撤回、原哈希不变；0.4.0 未发布。新源码不冒充正式注册表包。
+- 本地最终桌面包 52 文件，官方 Node v24.15.0；最终包 SQLite 在线导出/读回与无全局 Node 的原生宿主检查通过。不上传包、运行状态或原始报告。
+- CI 发现旧 action 的 Node 20 弃用提示，后续维护将 checkout 固定至官方 v7.0.1 SHA、setup-node 固定至 v7.1.0 SHA（两者 action 运行时 Node 24），关闭检出凭据持久化与自动 npm 缓存；项目本身仍以 Node 22 测试。此 CI 维护不改变仓库数据格式；对应新运行以 Actions 为准。
+
 ## 0.3.1 GitHub 补丁，未发布 Mooncakes
 
 0.3.0 发布后的补查复现 Windows PowerShell 用默认 OEM 编码读取 JSON 标准输入会损坏中文，影响桌面提醒显示，不影响已验证的备份内容。主分支修复为显式 UTF-8 输入/输出，并新增包含中文/引号/表达式样式文本的真实进程回归。用户明确选择“先只修复和推送 GitHub”，因此未执行 Mooncakes 0.3.1 发布，注册表 0.3.0 不覆盖。0.3.1 源码/本地包与正式注册表版本需区别。

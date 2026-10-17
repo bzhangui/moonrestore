@@ -22,6 +22,8 @@
 | 本地包 | 普通包 46 文件、内置官方 Node 包 52 文件，SHA-256 白名单/许可证/独立 CLI 冒烟通过，包含新救援/巡检/索引/提供器入口；Windows 原生宿主在屏蔽全局 Node 后启动、授权访问及停止通过；末次说明更新后重新打包 |
 | 隐私与发布 | Mooncakes 包列表门禁通过；私人申报书/报告、数据、密钥、SDK/运行时缓存不在公开源码或发布清单。本轮只 GitHub、不执行 moon publish |
 
+远端 f7453db 对应三平台 CI 38998994913 已全部成功，后续 CI action 运行时维护单列 PUBLICATION。最终包额外验证实际调用包内 SQLite worker、备份及恢复读回；不是只检查该文件存在。
+
 复现入口：scripts/validate.mjs、scripts/repeat.mjs 3 120、scripts/history-scale.mjs、scripts/large-file.mjs、scripts/compatibility-qa.mjs OLD_0_2_BUNDLE、scripts/package.mjs、scripts/package-desktop.mjs、scripts/desktop-qa.mjs DESKTOP_BUNDLE。浏览器：另行安装 Playwright，先启动 scripts/ui-pilot.mjs，再运行 scripts/browser-qa.mjs SESSION_FILE；停止只清理本次合成夹具。各规模报告/密钥/原始日志不提交。
 
 大文件样本为零和末尾标记，SHA-256 97439b504cb2e2c38a52cd601e1104151606a2b97d60e8ff3298b8c004fb1087；不代表任意随机数据去重率。真实 VSS 请求器、新编码、通用字节级续传尚未实现。真实 S3/IAM/Object Lock 保留期、独立介质/NAS/跨主机、硬件断电、长期生产、外部用户及原生托盘/安装窗口人工交互未验证；模拟不能替代。下面均是相应旧版本的历史记录。
