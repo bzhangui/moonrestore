@@ -2,11 +2,11 @@
 
 用 MoonBit 实现的可验证增量备份与恢复工具。面向论文、代码、实验资料及小团队文件资产：不仅保存历史，还检查损坏范围、演练恢复，并对实际读回留下证据。
 
-[公开源码](https://github.com/bzhangui/moonrestore) · [CI](https://github.com/bzhangui/moonrestore/actions) · [Mooncakes 正式版 0.3.0](https://mooncakes.io/docs/bzhangui/moonrestore) · [测试报告](docs/QUALITY_REPORT.md) · [更新记录](CHANGELOG.md)
+[公开源码](https://github.com/bzhangui/moonrestore) · [CI](https://github.com/bzhangui/moonrestore/actions) · [Mooncakes 0.5.0](https://mooncakes.io/docs/bzhangui/moonrestore) · [测试报告](docs/QUALITY_REPORT.md) · [更新记录](CHANGELOG.md)
 
-## 当前版本：0.5.0 源码升级
+## 当前版本：0.5.0
 
-本轮只更新 GitHub，不发布 Mooncakes 新版本。正式版 `moon add bzhangui/moonrestore@0.3.0` 不包含本轮新增 API。[验收进度](docs/ACCEPTANCE.md) 与 [发布记录](docs/PUBLICATION.md) 区分本机、远端及历史结果。
+使用 `moon add bzhangui/moonrestore@0.5.0` 安装 MoonBit 核心库，包含 0.4/0.5 新增恢复、巡检和操作规则 API；0.3.0 旧包不包含这些接口。CLI/工作台仍需按下文从源码构建，Mooncakes 不是 Windows 桌面二进制下载。[验收进度](docs/ACCEPTANCE.md) 与 [发布记录](docs/PUBLICATION.md) 区分注册表发布、本机、远端及历史结果；以发布记录中的实际查询、哈希与独立消费结果为准。
 
 | 能力 | 当前行为和边界 |
 | --- | --- |
@@ -105,7 +105,7 @@ node bin/moonrestore.mjs sqlite-backup REPO DATABASE_FILE --label "应用备份"
 ```sh
 moon run examples/core --target wasm
 # 独立 MoonBit 项目消费正式发布版
-moon add bzhangui/moonrestore@0.3.0
+moon add bzhangui/moonrestore@0.5.0
 ```
 
 `moon.pkg` 导入 `"bzhangui/moonrestore/core" @backup`。见 [样例](examples/core/main.mbt)、[API](core/pkg.generated.mbti)。

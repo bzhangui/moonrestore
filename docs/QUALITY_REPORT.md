@@ -2,7 +2,7 @@
 
 ## 0.5.0 可靠任务与运输归档（2026-10-17）
 
-Windows x64，项目私有 moonc 0.10.15+943464bfa / moon 0.1.20261012，Node 24.15.0。以下是本轮实际执行，0.4 及更早章节均为历史记录。推送和精确提交 CI 另见 PUBLICATION；本轮不发布 Mooncakes。
+Windows x64，项目私有 moonc 0.10.15+943464bfa / moon 0.1.20261012，Node 24.15.0。以下是开发维护阶段实际执行，0.4 及更早章节均为历史记录。源码推送、精确提交 CI 及后续授权的 Mooncakes 发布与独立消费另见 PUBLICATION。
 
 | 检查 | 本轮结果与证据边界 |
 | --- | --- |
@@ -26,7 +26,7 @@ Windows x64，项目私有 moonc 0.10.15+943464bfa / moon 0.1.20261012，Node 24
 
 复现：`node scripts/validate.mjs`，`node scripts/repeat.mjs 3 40`；浏览器先启动 ui-pilot，再运行 browser-qa SESSION；`node scripts/large-file.mjs --durable-restore` 为实际 >2 GiB 新恢复写入专项；`node scripts/package-desktop.mjs` 重建独立运行包并执行全部包内功能冒烟。所有夹具是合成资料。大文件本次原始控制台日志私有保留，临时夹具和夹具内报告已清理；脚本随后将运行状态限定在子进程临时目录，使后续私有汇总报告不会随夹具清理。
 
-缺口明确保留：原生 VSS 请求器和分段 live manifest **未实现**；默认 PostgreSQL 命令不执行 SQL 恢复。真实云账户/独立硬件/跨主机/物理断电/长期生产/外部用户和人工托盘/安装交互未完成，不能由模拟或 CI 数据库替代。正式 Mooncakes 仍为旧版，新 API 只有源码/本地包。
+缺口明确保留：原生 VSS 请求器和分段 live manifest **未实现**；默认 PostgreSQL 命令不执行 SQL 恢复。真实云账户/独立硬件/跨主机/物理断电/长期生产/外部用户和人工托盘/安装交互未完成，不能由模拟或 CI 数据库替代。开发阶段仅源码/本地包，后续正式注册表发布状态单列 PUBLICATION，不将发布成功等同于填补功能或生产验证缺口。
 
 真实 PostgreSQL CI 首次运行未通过，定位为 libpq 把空 PGSERVICE 当成“空名称服务”，而不是未配置；本机受控替身此前未捕获这项真实客户端语义。修复为删除继承的服务/路由选项，仅保留明确凭据/TLS 环境，再设置受限连接参数，新增环境回归；不输出原始客户端错误或密码。对应修复后 CI 状态见 PUBLICATION，不将首次失败掩盖为成功。
 

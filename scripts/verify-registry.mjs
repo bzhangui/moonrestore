@@ -4,9 +4,40 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";
 import { moon, moonEnv, versionCheck } from "./build.mjs";
-const version = process.argv[2] || "0.3.0";
+const sourceVersion = fs
+  .readFileSync(new URL("../moon.mod", import.meta.url), "utf8")
+  .match(/^version\s*=\s*"([^"]+)"/m)?.[1];
+const version = process.argv[2] || sourceVersion;
 if (!/^\d+\.\d+\.\d+$/.test(version))
   throw new Error("Expected an explicit release version");
+const [major, minor] = version.split(".").map(Number),
+  recovery = major > 0 || minor >= 4,
+  operations = major > 0 || minor >= 5;
+const extra = recovery
+  ? `///|
+fn verify_recovery_operations() -> Unit raise {
+  let bytes = b"independent new API consumer"
+  let file : @backup.Entry = {path:"sample.txt",kind:"file",size:bytes.length().to_int64(),hash:@backup.digest(bytes),chunks:[{id:@backup.digest(bytes),size:bytes.length()}]}
+  let snapshot : @backup.Snapshot = {format:1,created:"2026-10-17T00:00:00.000Z",label:"new API consumer",config:@backup.ChunkConfig::default(),entries:[file]}
+  assert_eq(@backup.rescue_entries(snapshot, [], ["sample.txt"]), [file])
+  let batch = @backup.verification_batch(snapshot, 0, 1, 1048576L)
+  assert_eq(batch.paths, ["sample.txt"])
+  assert_eq(batch.next, batch.total)
+  ${
+    operations
+      ? `@backup.validate_checkpoint_entry(file, snapshot.config, @backup.Limits::default())
+  assert_true(@backup.operation_transition("paused", "running"))
+  assert_false(@backup.operation_transition("prepared", "completed"))
+  assert_true(@backup.clock_guard(100L, 110L, 20L))
+  assert_false(@backup.clock_guard(100L, 90L, 20L))`
+      : ""
+  }
+}
+
+///|
+test "published recovery and operation API" { verify_recovery_operations() }
+`
+  : "";
 const parent = fileURLToPath(new URL("../.local/", import.meta.url));
 fs.mkdirSync(parent, { recursive: true });
 const directory = fs.mkdtempSync(path.join(parent, "registry-consumer-"));
@@ -73,13 +104,15 @@ fn verify_maintenance() -> Unit raise {
 }
 
 ///|
-fn main { try { verify_integrity(); verify_maintenance(); println("registry consumer verified") } catch { e => abort("consumer failed: \\{e}") } }
+fn main { try { verify_integrity(); verify_maintenance(); ${recovery ? "verify_recovery_operations(); " : ""}println("registry consumer verified") } catch { e => abort("consumer failed: \\{e}") } }
 
 ///|
 test "published integrity API" { verify_integrity() }
 
 ///|
 test "published maintenance API" { verify_maintenance() }
+
+${extra}
 `,
 );
 console.log(versionCheck());
