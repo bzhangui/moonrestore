@@ -4,6 +4,13 @@
 
 用户授权测试及隐私检查后推送 bzhangui/moonrestore main，明确“暂不发布 Mooncakes”。本轮不执行 moon publish、不上传本地运行包或私人申报书/原始报告。新功能及未完成边界见 RELIABILITY_0_5、THREE_STAGE_PLAN；精确提交与 CI 状态在核验后补录，不沿用旧提交成功结果。
 
+- 功能提交 `3f6c7f0aabea83fd1aa041ca4a65b5b389d9df32`、原生 PostgreSQL 修补 `6e8117e5c09f8dafc7d467bd3e5516cd45c39981` 已推送 main，使用 GitHub noreply 提交邮箱。修补后本机完整 114 项中 113 通过/1 原生 PostgreSQL 专项跳过；27 核心用例 × 四目标、425/458 core 覆盖率、包隐私全部通过。
+- 首次 [CI 39014311481](https://github.com/bzhangui/moonrestore/actions/runs/39014311481) 暴露真实 libpq 空服务环境变量错误；修补后新运行替代并取消剩余旧作业，不能将首次失败描述为通过。
+- 修补后 [CI 39014458667](https://github.com/bzhangui/moonrestore/actions/runs/39014458667) 对精确提交 6e8117e 的 Windows/Ubuntu/macOS 检查、构建、四目标测试/示例、覆盖率、包隐私与便携包功能冒烟 **全部成功**，Windows 原生启动器编译通过。原生 PostgreSQL 专项也成功：一次性真实 PostgreSQL 16、实际 pg_dump/pg_restore、新库 SQL 恢复、行数和长字段断言；与本机替身测试分开记录。后续纯文档补录不改变该功能提交的代码证据，后续提交自身结果仍以对应 Actions 为准。
+- 最终本机 Windows 内置运行时包 60 文件，官方 Node v24.15.0；加密/SQLite/救援/巡检/索引及新增可靠备份恢复、计划、分段归档、新密钥迁移真实冒烟通过，屏蔽全局 Node 后宿主检查通过。包只在本机，原有包保留回退，不公开私人状态。
+- 实际 2,147,483,649 字节新恢复 writer 与独立 SHA-256 读回、旧 0.2 包双向恢复、三轮重复恢复、实际 Edge 桌面/窄屏新旧界面流程通过；范围见 QUALITY_REPORT。原生 VSS 请求器/live 分段清单未实现，真实外部生产证据缺口不因此消失。
+- 本轮只读查询 Mooncakes latest_version 为 **0.3.0**，未执行发布/撤回。0.5.0 的源码、本地包与注册表旧包明确区分。私人申报书、源数据/备份、密钥、SDK、原始运行报告无 Git 跟踪路径。
+
 ## 0.4.0 源码升级（本轮不发布 Mooncakes）
 
 用户明确授权测试和隐私检查后推送 GitHub main，明确选择真实 S3/VSS/跨主机先做受控适配。正式注册表仍为 0.3.0，本轮未执行 moon publish，也不发布运行包附件。新 API 只能使用对应源码/本地构建，不能将注册表旧包混同为最新版。
