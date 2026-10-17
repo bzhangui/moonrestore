@@ -1,8 +1,26 @@
 # 发布核验记录
 
-## 0.5.0 正式发布流程（2026-10-17）
+## 0.5.0 正式发布（2026-10-17）
 
-用户在 82d7223 源码四项 CI 全部成功后，另行明确授权“推送至 mooncakes”。目标为 bzhangui/moonrestore@0.5.0，不覆盖或撤回旧版。发布准备检查私有文件排除、许可证和实际压缩包，发布后查询服务器、比对包哈希并从注册表下载进行四目标独立消费验证；完成结果会补录到 GitHub 本节，不预先写不存在的成功证据。申报书、密钥、备份、私有报告、SDK 和运行时缓存不公开，桌面运行包不随注册表发布。
+用户在 82d7223 源码四项 CI 全部成功后，另行明确授权“推送至 mooncakes”。现已发布 [bzhangui/moonrestore@0.5.0](https://mooncakes.io/docs/bzhangui/moonrestore)，不覆盖或撤回旧版。申报书、密钥、备份、私有报告、SDK 和运行时缓存不公开，桌面运行包不随注册表发布。
+
+- 发布准备提交为 `adb24e4`，沿用已通过 [四项 CI 39014789498](https://github.com/bzhangui/moonrestore/actions/runs/39014789498) 的 82d7223 功能源码，只更新发布说明与独立消费脚本。本轮再次执行 fmt、四目标 check/test（各 27 核心用例）与实际 ZIP 隐私检查；147 个包条目未发现私有路径，LICENSE/NOTICE 保留。
+- 正式 `moon publish` 本地及解包检查均通过，服务端返回 **200 OK**。随后精确版本与无版本 `moon view --json` 查询均成功，版本及 latest_version 为 **0.5.0**，未撤回。注册表发布时间为 **2026-10-17 15:56:18（UTC+8）**；许可证 Apache-2.0，固定依赖 moonbitlang/x 0.5.5。
+- 注册表 metadata.checksum 与实际上传 ZIP 的 SHA-256 一致：
+
+```text
+383cdb04294ff1fbc5e6fbfb8ff4cd51931a8a955dd3c15ecaa9120c513664f1
+```
+
+- 独立临时消费项目实际从注册表安装 0.5.0，无 path/workspace 替换；JS/Wasm/Wasm-GC/Native 各自 check、release build、运行断言及 **3 个消费测试全部通过**，共 12 次测试执行。包含公开恢复选择/巡检批次、检查点验证、操作状态转换、时钟门禁及既有完整性/维护 API。复现：`node scripts/verify-registry.mjs 0.5.0`。
+- 首次 `publish --frozen` 在上传前因新解包目录不能安装依赖失败，查询确认当时注册表仍为 0.3.0；改用正常 `moon publish`，固定依赖未改变，未跳过源代码或解包验证。临时发布凭据仅当前用户可读，两个尝试均在 finally 清除；原登录文件未修改，内容未输出。
+- Mooncakes 安装提供 MoonBit 核心库，不等于发布 Windows EXE 或完整桌面运行包。原生 VSS 请求器、live 分段清单、真实云商及长期生产证据等缺口仍按 QUALITY_REPORT 保留。下面历史记录不代表当前注册表仍停留在旧版；本次证据补录不覆盖已发布的 0.5.0 包。
+
+```sh
+moon add bzhangui/moonrestore@0.5.0
+moon view bzhangui/moonrestore@0.5.0 --json
+node scripts/verify-registry.mjs 0.5.0
+```
 
 以下为获得本次新增发布授权之前的源码开发历史记录。
 
