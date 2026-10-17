@@ -22,7 +22,7 @@ jobs:
         ports:
           - 5432:5432
         options: >-
-          --health-cmd pg_isready --health-interval 5s
+          --health-cmd "pg_isready -U moonrestore_ci -d moonrestore_ci" --health-interval 5s
           --health-timeout 5s --health-retries 10
     env:
       MOONRESTORE_PG_NATIVE: '1'

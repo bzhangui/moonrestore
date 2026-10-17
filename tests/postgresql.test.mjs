@@ -3,7 +3,29 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 import { fixture, call } from "./helpers.mjs";
-import { postgresBackup } from "../platform/postgresql.mjs";
+import {
+  postgresBackup,
+  postgresEnvironment,
+} from "../platform/postgresql.mjs";
+
+test("PostgreSQL environment removes inherited services and routing instead of assigning empty service names", () => {
+  const environment = postgresEnvironment(
+    { host: "127.0.0.1", port: 5432, database: "synthetic", user: "tester" },
+    {
+      PGSERVICE: "unexpected",
+      PGSERVICEFILE: "private-service",
+      PGHOSTADDR: "192.0.2.1",
+      PGOPTIONS: "arbitrary",
+      PGPASSWORD: "synthetic-password",
+      PATH: "preserved",
+    },
+  );
+  for (const name of ["PGSERVICE", "PGSERVICEFILE", "PGHOSTADDR", "PGOPTIONS"])
+    assert.equal(Object.hasOwn(environment, name), false);
+  assert.equal(environment.PGHOST, "127.0.0.1");
+  assert.equal(environment.PGPASSWORD, "synthetic-password");
+  assert.equal(environment.PATH, "preserved");
+});
 test("PostgreSQL controlled client export, archive expansion, backup and isolated disk drill", async () => {
   const f = fixture(),
     old = process.env.MOONRESTORE_HOME;

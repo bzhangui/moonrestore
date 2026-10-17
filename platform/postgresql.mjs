@@ -19,6 +19,37 @@ function executable(input, name) {
     throw new Error("Unexpected PostgreSQL executable");
   return p;
 }
+export function postgresEnvironment(
+  { host, port, database, user, allowRemote = false },
+  base = process.env,
+) {
+  const environment = { ...base },
+    allowed = [
+      "PGPASSWORD",
+      "PGPASSFILE",
+      "PGSSLROOTCERT",
+      "PGSSLCERT",
+      "PGSSLKEY",
+      "PGSSLCRL",
+      "PGSSLCRLDIR",
+    ];
+  for (const key of Object.keys(environment))
+    if (
+      key.toUpperCase().startsWith("PG") &&
+      !allowed.includes(key.toUpperCase())
+    )
+      delete environment[key];
+  return {
+    ...environment,
+    PGHOST: host,
+    PGPORT: String(port),
+    PGDATABASE: database,
+    PGUSER: user,
+    PGCONNECT_TIMEOUT: "10",
+    PGSSLMODE: allowRemote ? "verify-full" : "prefer",
+    PGAPPNAME: "moonrestore",
+  };
+}
 export function postgresClient(
   exe,
   args,
@@ -129,20 +160,15 @@ export async function postgresBackup(
     archive = path.join(owned, "database.dump"),
     expanded = path.join(owned, "validation.sql");
   // Pass credentials only via caller's environment/passfile, never CLI/report.
-  const environment = {
-    ...process.env,
-    PGHOST: host,
-    PGHOSTADDR: "",
-    PGPORT: String(port),
-    PGDATABASE: database,
-    PGUSER: user,
-    PGCONNECT_TIMEOUT: "10",
-    PGSSLMODE: allowRemote ? "verify-full" : "prefer",
-    PGSERVICE: "",
-    PGSERVICEFILE: "",
-    PGOPTIONS: "",
-    PGAPPNAME: "moonrestore",
-  };
+  // Empty PGSERVICE is not equivalent to absence in libpq: it requests an
+  // empty named service. Remove inherited routing/service options entirely.
+  const environment = postgresEnvironment({
+    host,
+    port,
+    database,
+    user,
+    allowRemote,
+  });
   const execute = (exe, args, output) =>
     client(exe, args, { environment, timeoutMs, maxBytes, output });
   try {
