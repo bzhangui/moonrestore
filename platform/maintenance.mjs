@@ -263,7 +263,7 @@ export async function health(
   const report = {
     format: 1,
     tool: "MoonRestore",
-    version: "0.3.1",
+    version: "0.4.0",
     kind: "integrity",
     started,
     finished: new Date().toISOString(),
@@ -301,7 +301,7 @@ export async function drill(
   const target = path.join(owned, "restored");
   const report = {
     format: 1,
-    version: "0.3.1",
+    version: "0.4.0",
     kind: "restore_drill",
     snapshot,
     started: new Date().toISOString(),

@@ -4,11 +4,13 @@
 |---|---|---|---|
 | MoonBit core | 编译器配套 core，0.2.0 验证基线 moonc 0.10.15 | JSON、字节、UTF-8、容器等标准库 | Apache-2.0 |
 | SHA-256 | [moonbitlang/x](https://github.com/moonbitlang/x)，0.5.5 | 调用公开 crypto API；未自创加密原语 | Apache-2.0 |
-| Node.js | 外部 Node ≥ 22；可选 Windows 桌面包内置精确版本 | 文件/进程和标准 crypto；内置版保留完整 `runtime/NODE_LICENSE.txt` 与来源/哈希 | [上游许可](https://github.com/nodejs/node/blob/main/LICENSE) |
+| Node.js | 外部 Node ≥ 22.16.0；可选 Windows 桌面包内置精确版本 | 文件/进程、标准 crypto、fetch 和 SQLite backup；内置版保留完整 `runtime/NODE_LICENSE.txt` 与来源/哈希 | [上游许可](https://github.com/nodejs/node/blob/main/LICENSE) |
 | Windows 原生启动器 | 原创 `platform/windows/Launcher.cs` | 调用系统 .NET Framework / Windows Forms；不分发系统组件 | 项目代码 Apache-2.0；系统组件按 Windows 条款 |
 | C 目录提交辅助程序 | 本项目 `platform/rename_noreplace.c` | Linux renameat2 / macOS renamex_np 排他重命名 | Apache-2.0 |
 
 本项目是原创备份应用，不是 HookLab/MoonMQTT 的改名，也不是 Restic 或 MoonChunk 的代码移植。CDC 使用通用 Gear 滚动指纹思路，确定性表由本项目种子公式生成；指纹只决定分块边界，实际对象身份使用 SHA-256。
+
+0.4 使用 Node 标准 node:sqlite 的在线备份和 SQLite integrity_check，不内嵌第三方数据库绑定；使用标准 crypto/fetch 实现 SigV4 编排，按 AWS 官方公开测试向量验证，不复制 AWS SDK。VSS 生命周期仅参考 Microsoft 文档，尚未提供真实特权请求器。上游 Node 完整 LICENSE 包含其 SQLite 等第三方归属，内置运行时包不得裁剪该许可。设计调研不是移植、兼容性或生产效果背书。
 
 设计调研参考 [Restic CDC 介绍](https://restic.net/blog/2015-09-12/restic-foundation1-cdc/) 和 [MoonChunk](https://github.com/xgzh1111/1234) 的职责边界。未复制两者的源代码，也不兼容其仓库格式。持久仓库、安全恢复和文件系统事务由本项目实现。
 

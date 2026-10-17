@@ -17,7 +17,7 @@ import {
   unseal,
 } from "./vault.mjs";
 
-function publishDirectory(source, target) {
+export function publishDirectory(source, target) {
   if (process.platform === "win32") {
     fs.renameSync(source, target);
     return;
@@ -75,7 +75,7 @@ function checkedPath(input, mustExist = true) {
   return full;
 }
 
-function safeRelative(rel) {
+export function safeRelative(rel) {
   if (
     typeof rel !== "string" ||
     !rel ||
@@ -162,6 +162,7 @@ function writeNew(p, bytes) {
 
 export class Host {
   constructor({ environment = process.env, allowMaintenance = false } = {}) {
+    this.readOnly = environment.MOONRESTORE_READ_ONLY === "1";
     this.repo = null;
     this.held = false;
     this.source = null;
@@ -245,6 +246,12 @@ export class Host {
     if (!this.held) throw new Error("Repository lock required");
   }
   lock() {
+    if (this.readOnly) {
+      // No lock or metadata is written. Readers verify immutable content IDs;
+      // a concurrent writer can make reading fail and is not excluded by this.
+      this.held = true;
+      return;
+    }
     const p = this.repoPath(".lock");
     try {
       fs.mkdirSync(p, { mode: 0o700 });
@@ -273,6 +280,10 @@ export class Host {
     this.held = true;
   }
   unlock() {
+    if (this.readOnly) {
+      this.held = false;
+      return;
+    }
     if (this.held) {
       const p = this.repoPath(".lock");
       fs.unlinkSync(checkedPath(path.join(p, "owner.json")));
@@ -297,6 +308,7 @@ export class Host {
     this.key = null;
   }
   store(id, bytes) {
+    if (this.readOnly) throw new Error("Read-only repository session");
     this.requireLock();
     idPath(id);
     const final = this.storagePath("object", id);
@@ -386,6 +398,25 @@ export class Host {
     );
   }
   operation(op, a, bytes) {
+    if (
+      this.readOnly &&
+      ![
+        "open",
+        "lock",
+        "unlock",
+        "profile",
+        "clock",
+        "get",
+        "manifest",
+        "list",
+        "inventory",
+        "set_metadata",
+        "metadata",
+        "verify_tick",
+        "verified_file",
+      ].includes(op)
+    )
+      throw new Error("Read-only repository session");
     if (!["unlock", "recover"].includes(op)) this.pulse(op);
     switch (op) {
       case "init": {

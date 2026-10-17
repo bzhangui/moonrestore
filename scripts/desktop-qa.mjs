@@ -28,7 +28,7 @@ try {
   const vss = await vssPreflight(root),
     device = await deviceRelation(root, root);
   const report = {
-    version: "0.3.1",
+    version: "0.4.0",
     kind: "windows_desktop_qa",
     ok: true,
     embedded_runtime_without_global_node: true,

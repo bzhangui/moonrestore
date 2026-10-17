@@ -12,8 +12,9 @@ function run(command, args) {
   if (r.error) throw r.error;
   if (r.status !== 0) process.exit(r.status ?? 1);
 }
-if (Number(process.versions.node.split(".")[0]) < 22)
-  throw new Error("Node >= 22 required");
+const [major, minor] = process.versions.node.split(".").map(Number);
+if (major < 22 || (major === 22 && minor < 16))
+  throw new Error("Node >= 22.16.0 required (SQLite online backup)");
 console.log(versionCheck());
 run(moon, ["update"]);
 run(moon, ["fmt", "--check"]);

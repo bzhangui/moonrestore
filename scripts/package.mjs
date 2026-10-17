@@ -35,6 +35,7 @@ const destination = path.join(
 fs.mkdirSync(destination); // Never overwrite a previous bundle.
 const files = [
   "bin/moonrestore.mjs",
+  "bin/sqlite-export.mjs",
   "platform/adapter.mjs",
   "scripts/console.ps1",
   "scripts/verify-package.mjs",
@@ -48,10 +49,18 @@ const files = [
   "platform/explorer.mjs",
   "platform/notifications.mjs",
   "platform/system.mjs",
+  "platform/recovery.mjs",
+  "platform/recovery-target.mjs",
+  "platform/applications.mjs",
+  "platform/search-index.mjs",
+  "platform/s3.mjs",
+  "platform/remote.mjs",
+  "platform/snapshot-provider.mjs",
   "ui/index.html",
   "ui/style.css",
   "ui/app.js",
   "ui/enhancements.js",
+  "ui/recovery.js",
   "_build/js/release/build/cmd/main/main.js",
   "examples/demo.mjs",
   "examples/scenarios.mjs",
@@ -66,6 +75,9 @@ const files = [
   "docs/RECOVERY.md",
   "docs/DESKTOP.md",
   "docs/PRACTICAL_0_3.md",
+  "docs/RECOVERY_0_4.md",
+  "docs/APPLICATIONS.md",
+  "docs/REMOTE.md",
 ];
 if (process.platform !== "win32") files.push("_build/host/rename_noreplace");
 if (embedded)
@@ -118,7 +130,7 @@ const metadata = JSON.stringify(
     version: sourceVersion,
     private: true,
     type: "module",
-    engines: { node: ">=22" },
+    engines: { node: ">=22.16.0" },
   },
   null,
   2,
@@ -192,7 +204,7 @@ console.log(
       file_count: Object.keys(hashes).length,
       runtime_required: embedded
         ? "included Node " + runtime.version
-        : "Node.js >= 22",
+        : "Node.js >= 22.16.0",
       publicly_published: false,
     },
     null,

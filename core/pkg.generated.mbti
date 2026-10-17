@@ -26,6 +26,8 @@ pub fn encode_with_metadata(Snapshot, Array[FileMetadata], limits? : Limits) -> 
 
 pub fn path_order(String, String) -> Int
 
+pub fn rescue_entries(Snapshot, Array[String], Array[String]) -> Array[Entry] raise BackupError
+
 pub fn retention_keep(Array[RetentionRecord], Int, Int, Int, Int, Array[String]) -> Array[String] raise BackupError
 
 pub fn select_entries(Snapshot, Array[String]) -> Array[Entry] raise BackupError
@@ -37,6 +39,8 @@ pub fn text_digest(String) -> String
 pub fn valid_id(String) -> Bool
 
 pub fn validate_path(String) -> Unit raise BackupError
+
+pub fn verification_batch(Snapshot, Int, Int, Int64) -> VerificationBatch raise BackupError
 
 pub fn verify_chunk(ChunkRef, Bytes) -> Unit raise BackupError
 
@@ -157,6 +161,14 @@ pub fn Snapshot::not_equal(Self, Self) -> Bool
 pub fn Snapshot::to_json(Self) -> Json
 pub fn Snapshot::to_repr(Self) -> @debug.Repr
 pub fn Snapshot::validate(Self, limits? : Limits) -> Unit raise BackupError
+
+pub(all) struct VerificationBatch {
+  paths : Array[String]
+  next : Int
+  total : Int
+  bytes : Int64
+} derive(ToJson)
+pub fn VerificationBatch::to_json(Self) -> Json
 
 // Type aliases
 

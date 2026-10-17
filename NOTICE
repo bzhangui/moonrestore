@@ -12,6 +12,9 @@ The optional Windows desktop bundle includes an official Node.js executable
 and its complete upstream LICENSE in runtime/NODE_LICENSE.txt, including
 third-party notices. Exact version, source URL and SHA-256 are in manifest.json.
 Node built-in modules provide filesystem/process and standard crypto support.
+Version 0.4 also uses Node built-in fetch and node:sqlite online backup.
+S3 request orchestration is original project code validated with the public
+AWS SigV4 documentation vector; the AWS SDK is not embedded or copied.
 The backup engine's content hashing uses the MoonBit crypto dependency.
 
 The original Windows launcher uses the OS-provided .NET Framework and Windows

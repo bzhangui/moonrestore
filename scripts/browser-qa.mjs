@@ -182,6 +182,52 @@ try {
     .first()
     .click();
   await done();
+  // 0.4: new emergency flow must work in the actual DOM with bound confirmation.
+  await page.locator("#rescue-repository").fill(fixture.repository);
+  await page.locator("#emergency-list").click();
+  await done();
+  await page.locator("#emergency-snapshots button").first().click();
+  const rescueTarget = fixture.restore + "-emergency";
+  await page.locator("#rescue-target").fill(rescueTarget);
+  await page.locator("#rescue-form button[type=submit]").click();
+  await done();
+  assert.equal(await page.locator("#rescue-confirm").isDisabled(), true);
+  await page.locator("#accept-partial").check();
+  assert.equal(await page.locator("#rescue-confirm").isEnabled(), true);
+  await page.locator("#rescue-target").fill(rescueTarget + "-changed");
+  assert.equal(await page.locator("#rescue-confirm").isDisabled(), true);
+  await page.locator("#rescue-target").fill(rescueTarget);
+  await page.locator("#rescue-form button[type=submit]").click();
+  await done();
+  await page.locator("#rescue-confirm").click();
+  await done();
+  assert.equal((await result()).post_restore_readback, true);
+  assert.equal(
+    fs.readFileSync(path.join(rescueTarget, "paper.txt"), "utf8"),
+    "Controlled second revision.",
+  );
+  await page.locator("#health-status").click();
+  await done();
+  assert.equal((await result()).ok, false);
+  const healthCount = (await result()).snapshots.length;
+  for (let i = 0; i < healthCount; i++) {
+    await page.locator("#scrub-run").click();
+    await done();
+  }
+  await page.locator("#health-status").click();
+  await done();
+  assert.equal((await result()).ok, true);
+  await page
+    .locator("#checklist-output")
+    .fill(fixture.restore + "-checklist.json");
+  await page.locator("#checklist-export").click();
+  await done();
+  assert.equal((await result()).contains_keys, false);
+  await page.locator("#recovery details summary").click();
+  await page.locator("#rebuild-accept").check();
+  await page.locator("#rebuild-target").fill(fixture.restore + "-rebuilt");
+  assert.equal(await page.locator("#rebuild-accept").isChecked(), false);
+  assert.equal(await page.locator("#rebuild-run").isDisabled(), true);
   // Secrets are synthetic, never saved in screenshots or reports.
   const encrypted = path.join(path.dirname(fixtureFile), "gui-encrypted"),
     key = path.join(path.dirname(fixtureFile), "gui-recovery.key");
@@ -282,6 +328,10 @@ try {
       "no credential localStorage",
       "mobile no horizontal overflow",
       "no page errors",
+      "emergency restore explicit partial consent and stale-preview gating",
+      "read-only recovery with independent disk readback",
+      "persistent scrub unknown to full-cycle health evidence",
+      "key-free recovery checklist and rebuild consent invalidation",
     ],
     screenshot_files: ["desktop.png", "mobile.png"],
   };

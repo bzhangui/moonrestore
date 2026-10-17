@@ -30,6 +30,14 @@ import {
   vssPreflight,
 } from "./system.mjs";
 import { notices } from "./notifications.mjs";
+import {
+  rescuePlan,
+  rescueToNewTarget,
+  recoveryChecklist,
+  rebuildCopy,
+  scrub,
+  recoveryHealth,
+} from "./recovery.mjs";
 import { randomUUID } from "node:crypto";
 
 const ui = fileURLToPath(new URL("../ui/", import.meta.url));
@@ -92,6 +100,75 @@ export async function startWorkbench({
   };
   const runRoute = async (route, p) => {
     switch (route) {
+      case "emergency-list": {
+        object(p, ["repository", "recoveryKeyFile"]);
+        if (
+          p.recoveryKeyFile !== undefined &&
+          typeof p.recoveryKeyFile !== "string"
+        )
+          throw new Error("Invalid recovery key path");
+        return core(["list", p.repository], {
+          env: {
+            MOONRESTORE_READ_ONLY: "1",
+            MOONRESTORE_RECOVERY_TARGET: "",
+            ...(p.recoveryKeyFile
+              ? {
+                  MOONRESTORE_PASSWORD: "",
+                  MOONRESTORE_KEY_FILE: checked(p.recoveryKeyFile),
+                }
+              : {}),
+          },
+        });
+      }
+      case "rescue-preview":
+        object(p, [
+          "repository",
+          "snapshot",
+          "target",
+          "selections",
+          "recoveryKeyFile",
+        ]);
+        return rescuePlan(p);
+      case "rescue-apply":
+        object(p, [
+          "repository",
+          "snapshot",
+          "target",
+          "selections",
+          "recoveryKeyFile",
+          "confirmation",
+          "acceptPartial",
+        ]);
+        return rescueToNewTarget(p);
+      case "recovery-health":
+        object(p, ["repository", "maxAgeHours"]);
+        return recoveryHealth(p.repository, { maxAgeHours: p.maxAgeHours });
+      case "scrub":
+        object(p, ["repository", "maxFiles", "maxBytes", "snapshot"]);
+        return scrub(p.repository, {
+          maxFiles: p.maxFiles,
+          maxBytes: p.maxBytes,
+          snapshot: p.snapshot,
+        });
+      case "recovery-checklist":
+        object(p, ["repository", "output", "confirmation"]);
+        if (p.confirmation !== p.output)
+          throw new Error("Explicit new checklist path confirmation required");
+        return recoveryChecklist(p.repository, p.output);
+      case "rebuild-copy":
+        object(p, [
+          "repository",
+          "snapshot",
+          "donor",
+          "destination",
+          "confirmation",
+          "destinationPassword",
+        ]);
+        if (p.confirmation !== p.destination)
+          throw new Error("Explicit new rebuild destination required");
+        return rebuildCopy(p.repository, p.snapshot, p.donor, p.destination, {
+          destinationPassword: p.destinationPassword,
+        });
       case "job-save":
         return saveJob(p);
       case "job-edit":
@@ -313,6 +390,13 @@ export async function startWorkbench({
     }
   };
   const routes = [
+    "emergency-list",
+    "rescue-preview",
+    "rescue-apply",
+    "recovery-health",
+    "scrub",
+    "recovery-checklist",
+    "rebuild-copy",
     "job-save",
     "job-edit",
     "job-change",
@@ -371,7 +455,13 @@ export async function startWorkbench({
     }
     if (
       req.method === "GET" &&
-      ["/", "/app.js", "/enhancements.js", "/style.css"].includes(url.pathname)
+      [
+        "/",
+        "/app.js",
+        "/enhancements.js",
+        "/recovery.js",
+        "/style.css",
+      ].includes(url.pathname)
     ) {
       const file = path.join(
         ui,
@@ -379,6 +469,7 @@ export async function startWorkbench({
           "/": "index.html",
           "/app.js": "app.js",
           "/enhancements.js": "enhancements.js",
+          "/recovery.js": "recovery.js",
           "/style.css": "style.css",
         }[url.pathname],
       );

@@ -1,166 +1,109 @@
 # MoonRestore
 
-当前 GitHub main 含 **0.3.1 中文提醒编码补丁**，尚未发布 Mooncakes；注册表正式版本仍为 0.3.0。补丁显式使用 Windows UTF-8 JSON 输入/输出，不改变备份格式或内容算法。按用户选择只推送源码，版本差异见 [发布记录](docs/PUBLICATION.md)。
+用 MoonBit 实现的可验证增量备份与恢复工具。面向论文、代码、实验资料及小团队文件资产：不仅保存历史，还检查损坏范围、演练恢复，并对实际读回留下证据。
 
-## 0.3.0：更容易日常使用，也更容易核查
+[公开源码](https://github.com/bzhangui/moonrestore) · [CI](https://github.com/bzhangui/moonrestore/actions) · [Mooncakes 正式版 0.3.0](https://mooncakes.io/docs/bzhangui/moonrestore) · [测试报告](docs/QUALITY_REPORT.md) · [更新记录](CHANGELOG.md)
 
-新增任务编辑/暂停/恢复、显式开启的到期执行、离线重试和本机提醒；全历史搜索、版本差异、小文本预览与多选恢复；真实进度、安全取消及可配运行预算；自动校验第二副本；加密/恢复密钥/密码包装向导；修改时间与显式 POSIX 权限恢复。详细条件见 [实用性说明](docs/PRACTICAL_0_3.md)。
+## 当前版本：0.4.0 源码升级
 
-Windows x64 可本地生成**内置 Node 运行时**的桌面包，双击原生启动器，支持托盘与当前用户安装，不需要全局 Node/MoonBit。需 Windows .NET Framework 4.x；EXE 尚未代码签名。源码构建执行 `npm run package:desktop`，安装、私有状态位置与回退见 [桌面包指南](docs/DESKTOP.md)。本仓库不包含运行时二进制或私人运行包，也没有擅自发布 GitHub Release 附件。
+本轮只更新 GitHub，不发布 Mooncakes 新版本。正式版 `moon add bzhangui/moonrestore@0.3.0` 不包含本轮新增 API。[验收进度](docs/ACCEPTANCE.md) 与 [发布记录](docs/PUBLICATION.md) 区分本机、远端及历史结果。
 
-0.3.0 已正式发布到 [Mooncakes](https://mooncakes.io/docs/bzhangui/moonrestore)，[Windows/Ubuntu/macOS CI](https://github.com/bzhangui/moonrestore/actions/runs/38887889049) 全部通过；独立消费者四目标检查/构建/运行及测试通过。本机 63 项 Node 回归、22 项核心用例 × 四目标、实际 >2 GiB 恢复读回、真实浏览器及旧版兼容均通过。完整证据见 [维护报告](docs/QUALITY_REPORT.md)、[九项验收](docs/ACCEPTANCE.md) 与 [发布记录](docs/PUBLICATION.md)。
+| 能力 | 当前行为和边界 |
+| --- | --- |
+| 增量备份 | CDC、SHA-256 内容寻址、跨版本去重；不可变快照、输入预算与中断保护 |
+| 严格恢复 | 全量预校验、排他发布新目录；隔离恢复演练独立读回，不覆盖已有目标 |
+| 应急救援 | 只读源仓库，逐文件判断可救内容，显式接受部分恢复；损坏文件不补零、不报全量成功 |
+| 健康副本重建 | 两个只读来源补齐指定快照的对象或清单，在新仓库完整校验后发布；不原地修复 |
+| 恢复准备与巡检 | 独立密钥、无密钥准备清单、持久检查游标、完整周期和新鲜度；不是未来恢复保证 |
+| 历史搜索 | 有预算的可重建索引，源变化拒绝旧缓存，加密源索引也加密；不用于恢复或删除决策 |
+| SQLite | 在线导出单个主库、完整性检查、仓库校验和恢复演练；不保证多库事务一致性 |
+| S3 兼容副本 | 显式联网，仅加密源，SigV4、条件不覆盖写、读回校验、固定摘要下载；本机模拟通过，真实供应商待验证 |
+| 本机工作台 | 任务、历史、选择恢复、会话解锁、进度/取消、应急救援与健康证据；仅回环 |
 
-以下 0.2.0 记录保留为历史。VSS 仅只读准备检查；压缩仅完成原型评估，均不能当作已支持的存储能力。原生窗口人工检查、真实外部用户、独立介质/NAS、跨主机、断电和长期生产仍未验证。
+真实 VSS 请求器、分段清单/压缩新格式、备份/恢复的字节级续传尚未实现；巡检游标和对象级重试不能称为通用断点续传。独立介质、NAS、跨主机、断电、长期生产及外部用户仍待授权环境验证。
 
-## 0.2.0：从备份到实际恢复验证
+## 安装与最小示例
 
-0.2.0 已发布：新增私有 JSON/离线 HTML 校验报告、隔离恢复演练与恢复后读回、容量预检查、任务与异常变化门禁、本机工作台、标准认证加密、独立仓库复制、保留预览及隔离回收。默认仍不上传数据、不启动公网服务、不自动删除历史。
-
-本轮源码已通过 [Windows/Ubuntu/macOS CI](https://github.com/bzhangui/moonrestore/actions/runs/38866239121)，Mooncakes 0.2.0 已从独立项目下载并通过四目标消费验证。详细范围、校验和与尚未完成的真实环境验证见 [维护报告](docs/QUALITY_REPORT.md) 和 [发布记录](docs/PUBLICATION.md)。
-
-```sh
-npm run build
-npm run workbench
-```
-
-工作台默认绑定 `127.0.0.1:8790`。使用启动时的完整临时会话链接，链接不要公开；浏览器不会将令牌写入本地存储。创建普通仓库、保存任务、立即备份、查看版本和文件、预览恢复、完整校验与演练均使用真实后端，不是假数据演示。参见 [本机工作台与自动任务](docs/WORKBENCH.md)。
-
-新命令示例（路径、快照 ID 需替换为自己的；只操作自己控制的资料）：
-
-```sh
-node bin/moonrestore.mjs report E:/paper-vault all
-node bin/moonrestore.mjs drill E:/paper-vault SNAPSHOT_ID
-node bin/moonrestore.mjs capacity E:/paper-vault D:/papers
-node bin/moonrestore.mjs replicate E:/paper-vault F:/second-vault
-node bin/moonrestore.mjs prune E:/paper-vault --keep-last 10
-```
-
-`report` 默认导出脱敏摘要；`--details` 才包含失败文件相对路径。`drill` 在自建临时目录恢复，重新读取磁盘内容核对哈希，再清理该次自建目录。报告默认存于 Git 忽略的 `.local/state/reports/`。`prune` 默认只预览；执行隔离和至少 7 天后的永久清除是两个分别确认的操作，详见 [恢复、加密、副本与清理](docs/RECOVERY.md)。
-
-加密仓库通过 `init-encrypted` 初始化，密码使用 `MOONRESTORE_PASSWORD` 环境变量；不要把密码输入命令参数或提交源码。Windows 可显式 `key-store` 授权当前用户 DPAPI 保管。恢复密钥需单独私有保管；丢失全部解锁方式将无法恢复数据。
-
-大文件必须显式 `init-large NEW-REPOSITORY`，也可加 `--encrypted`。新 profile 使用格式 3：单文件配置上限 64 GiB、单快照总量上限 1 TiB，但仍同时受 100000 条目、1000000 分块引用、32 MiB 清单等预算限制。**这些是拒绝阈值，不代表上限规模已实测；不提供无限或恒定元数据内存保证。** 原格式仓库维持单文件 2 GiB/总量 64 GiB，不原地升级。详见 [格式说明](docs/FORMAT.md)。
-
-```sh
-npm run validate
-npm run test:repeat -- 3
-# 可选：至少预留 6 GiB 临时空间，实际 >2 GiB 备份/校验/恢复，可能耗时较长
-npm run test:large
-node scripts/check-package.mjs
-node scripts/package.mjs
-```
-
-0.2.0 保持核心库 JS/Wasm/Wasm-GC/Native 验证；完整文件系统、加密、调度和本机工作台当前仍由 Node/系统适配支持，不宣称四目标均具备完整联网/文件运行时。加密调用 Node 标准密码库，MoonBit 负责分块、清单、完整性校验、保留策略和备份/恢复编排。第三方归属与许可证继续见 [NOTICE](NOTICE)、[来源说明](docs/THIRD_PARTY.md)。
-
-基于 MoonBit 的可验证增量备份工具。备份后能校验完整内容，并恢复指定历史版本。适合论文、代码、实验数据和团队文件资产；独立于 HookLab 与 MoonMQTT。
-
-[公开源码](https://github.com/bzhangui/moonrestore) · [Mooncakes 0.3.0](https://mooncakes.io/docs/bzhangui/moonrestore) · [持续集成](https://github.com/bzhangui/moonrestore/actions) · [发布核验记录](docs/PUBLICATION.md)
-
-## 已实现
-
-- 流式内容分块（CDC）与 SHA-256 内容寻址，跨文件、跨快照去重。
-- 磁盘对象仓库、不可变快照、独占锁、临时文件事务和中断回收。
-- 完整文件与对象校验，检测缺失、损坏、错误大小和分块顺序错误。
-- 全量或文件/子目录恢复：先完整校验，再暂存，最后提交全新目录，不覆盖现有目录。
-- 快照比较、排除路径、备份预检查、存储占用及未引用对象统计。
-- Windows 交互菜单、命令行、可复用 MoonBit 核心库、自动测试与 CI 配置。
-
-## 安装与运行
-
-0.3.0 源码构建需要 [MoonBit](https://www.moonbitlang.com/download/)（moonc ≥ 0.10.15）、[Node.js](https://nodejs.org/) ≥ 22。构建脚本优先使用可选的 `.local/toolchain`，否则使用系统 SDK；可用 MOON_BIN/MOON_HOME 指定兼容环境。Linux/macOS 还需要系统 C 编译器，用于编译原子、不覆盖的目录提交辅助程序。Windows 不需要该辅助程序。
-
-获取源码后在项目目录执行（公开仓库地址：`https://github.com/bzhangui/moonrestore`）：
+需要 moonc ≥ 0.10.15、Node ≥ 22.16.0（推荐当前 LTS）。Linux/macOS 还需系统 C 工具链用于排他目录提交。无 npm 第三方运行依赖。构建优先用可选 `.local/toolchain`，否则使用系统 SDK；可设 `MOON_BIN` / `MOON_HOME`。
 
 ```sh
 git clone https://github.com/bzhangui/moonrestore.git
 cd moonrestore
 moon version --all
 npm run build
-node bin/moonrestore.mjs help
 npm run demo
 ```
 
-Windows 用户也可双击根目录的 **开始使用.cmd**。菜单支持创建仓库、备份、列出快照、完整校验和恢复；首次运行会构建。无需安装 npm 第三方依赖。
+demo 只创建临时合成资料，备份两稿并恢复首稿，不接触个人文件。首次构建需联网下载固定依赖；已构建的文件工作流离线运行，S3 命令除外。
 
-首次源码构建需要联网获取 Mooncakes 索引和固定版本依赖；构建脚本会先更新索引，避免仅在开发者已有缓存的机器上成功。已构建的 CLI 和便携运行包不需要联网。
-
-本机源码目录为 `D:\moonrestore`。这不是网址，不需要启动网页服务。
-
-## 最小使用示例
-
-以下仓库与恢复目标必须尚不存在；父目录必须已存在。路径含空格时加引号。
+以下路径需替换为自己控制的目录，仓库和恢复目标必须尚不存在，父目录必须存在。Unix 替换盘符，路径含空格时加引号。
 
 ```sh
 node bin/moonrestore.mjs init "E:/paper-vault"
-node bin/moonrestore.mjs plan "E:/paper-vault" "D:/papers" --exclude "node_modules"
-node bin/moonrestore.mjs backup "E:/paper-vault" "D:/papers" --label "初稿" --exclude "node_modules"
+node bin/moonrestore.mjs plan "E:/paper-vault" "D:/papers" --exclude node_modules
+node bin/moonrestore.mjs backup "E:/paper-vault" "D:/papers" --label "初稿" --exclude node_modules
 node bin/moonrestore.mjs list "E:/paper-vault"
 node bin/moonrestore.mjs verify "E:/paper-vault" all
-node bin/moonrestore.mjs restore "E:/paper-vault" "完整的64位快照id" "D:/recovered-paper"
+node bin/moonrestore.mjs restore "E:/paper-vault" SNAPSHOT_ID "D:/recovered-paper"
 ```
 
-Linux/macOS 将盘符路径换成自己的目录即可。恢复后检查 `recovered-paper`，确认无误再自行替换工作文件。**不要为试用而删除自己的原始数据。**
+ID 为完整 64 位小写十六进制。排除项是精确相对路径前缀，不是通配符。大字节计数为十进制字符串。错误/不完整退出 1，缺构建退出 2。确认结果后再自行处理工作文件，勿为试用删除原件。
 
-`npm run demo` 自动生成临时样本，备份两稿，再恢复第一稿并断言内容一致，不接触个人资料。另有 `node examples/scenarios.mjs` 展示科研资料、团队资产和批处理回滚三个完整受控场景。
+## 工作台与运行包
 
-## 常用命令
+```sh
+npm run workbench
+node scripts/package.mjs
+# Windows x64 内置运行时与原生启动器
+npm run package:desktop
+```
 
-| 命令 | 用途 |
-|---|---|
-| `init <repo>` | 创建全新仓库 |
-| `plan <repo> <source> [--exclude p]` | 检查路径和预算，不写入数据对象 |
-| `backup <repo> <source> [--label text] [--exclude p]` | 创建增量快照；排除项可重复 |
-| `list <repo>` | 列出已校验清单的快照，不代表内容完整性已验证 |
-| `verify <repo> <id或all>` | 逐文件、逐对象验证全部内容 |
-| `restore <repo> <id> <new-target> [--prefix p]` | 恢复全量或部分内容，保留原相对路径 |
-| `diff <repo> <old-id> <new-id>` | 列出新增、修改、删除的路径 |
-| `status <repo>` | 存储统计及未引用对象清单，不自动删除 |
-| `recover <repo>` | 回收已停止的本机进程锁和未提交临时文件 |
+工作台默认 `127.0.0.1:8790`，须使用控制台提供的完整临时会话链接，不可公开。浏览器不将凭据存入 localStorage。运行 `node bin/moonrestore.mjs help` 查看命令；SQLite、索引和 S3 当前为 CLI 入口，不伪称全部已有图形向导。
 
-输出为 JSON；64 位字节计数使用十进制字符串，避免精度损失。成功退出码为 0，错误或 `status` 检出引用对象缺失/大小不符为 1；缺少构建文件为 2。
+桌面包不需要全局 Node/MoonBit，需系统 .NET Framework 4.x；EXE 尚未代码签名。包仅本地生成，不等于已发布 GitHub Release。不要求关闭系统安全策略。见 [桌面包](docs/DESKTOP.md)、[工作台](docs/WORKBENCH.md)。
 
-排除项是相对源目录的**精确路径前缀**，不是通配符；`--exclude cache` 排除 `cache` 及其子目录。分块参数可用 `--min`、`--avg`、`--max` 调整，默认 8/32/128 KiB，平均值必须为 2 的幂。
+## 0.4 恢复优先用法
 
-## 作为 MoonBit 库
+```sh
+node bin/moonrestore.mjs emergency-preview REPO SNAPSHOT_ID NEW_TARGET
+# 复制实际 confirmation，明确接受可能的部分恢复
+node bin/moonrestore.mjs emergency-restore REPO SNAPSHOT_ID NEW_TARGET --accept-partial --confirmation HASH
+node bin/moonrestore.mjs recovery-checklist REPO NEW_PRIVATE_JSON
+node bin/moonrestore.mjs scrub REPO --files 100 --bytes 268435456
+node bin/moonrestore.mjs health-status REPO --max-age-hours 168
+node bin/moonrestore.mjs index-build REPO
+node bin/moonrestore.mjs index-search REPO paper
+node bin/moonrestore.mjs sqlite-backup REPO DATABASE_FILE --label "应用备份"
+```
 
-核心 API 位于 `bzhangui/moonrestore/core`，不依赖 Node 或文件系统，支持 JS、Wasm、Wasm-GC、Native。本地可运行：
+[恢复/重建/巡检/索引](docs/RECOVERY_0_4.md) · [SQLite 与 VSS 边界](docs/APPLICATIONS.md) · [远端副本与授权](docs/REMOTE.md)
+
+## MoonBit 核心与结构
+
+`core/` 实现分块、哈希、清单/路径/属性校验、范围、保留规则与巡检批次；`app/` 用 MoonBit 编排备份、校验、恢复及救援；`platform/` 用 Node/OS 提供文件、加密、网络、任务；`ui/` 为原生 JS/CSS。不是包装 Node 备份库。
+
+核心支持 JS/Wasm/Wasm-GC/Native；完整磁盘、加密、网络及 GUI 运行时目前依赖 Node，不宣称四目标全具备这些系统能力。
 
 ```sh
 moon run examples/core --target wasm
-```
-
-已发布到 Mooncakes。在你的 MoonBit 项目中执行：
-
-```sh
+# 独立 MoonBit 项目消费正式发布版
 moon add bzhangui/moonrestore@0.3.0
 ```
 
-对应包的 `moon.pkg` 中添加 `"bzhangui/moonrestore/core" @backup` 导入，参考下面的核心库示例。发布后已从注册表下载到独立项目并验证四目标检查、运行和测试；不是只验证本仓库的相对导入。
+`moon.pkg` 导入 `"bzhangui/moonrestore/core" @backup`。见 [样例](examples/core/main.mbt)、[API](core/pkg.generated.mbti)。
 
-参考 [核心库示例](examples/core/main.mbt) 与生成的 [API](core/pkg.generated.mbti)。应用层 `app` 仅支持 JS，需要本项目的 Node 文件适配器，不是独立文件库。
-
-## 维护与测试
+## 维护与限制
 
 ```sh
 npm run validate
-npm test
-node examples/scenarios.mjs
-node scripts/benchmark.mjs
+node scripts/repeat.mjs 3 120
+node scripts/history-scale.mjs
+node scripts/large-file.mjs
 node scripts/package.mjs
 ```
 
-`validate` 执行四目标核心检查/构建/测试、格式检查、应用构建和文件系统集成测试。Native 测试需要系统 C 工具链；不会因为编译器缺失而默默略过。2026-10-09 的 [Windows、Linux、macOS CI](https://github.com/bzhangui/moonrestore/actions/runs/37942722864) 均通过；最新运行见仓库 Actions。
+validate 覆盖四目标检查/构建/测试/样例、Node/HTTP/故障回归、三场景、核心覆盖率与包隐私。large-file 至少预留 6 GiB 临时空间。规模测试仅合成资料，不是生产压测。真实浏览器入口见 [维护报告](docs/QUALITY_REPORT.md)。
 
-更多说明：[维护与故障处理](docs/OPERATIONS.md)、[仓库格式](docs/FORMAT.md)、[安全边界](SECURITY.md)、[测试报告](docs/QUALITY_REPORT.md)、[应用场景](docs/SCENARIOS.md)、[验收进度](docs/ACCEPTANCE.md)。
+默认仓库明文；敏感资料请显式加密，恢复密钥与仓库分开保管。丢失全部解锁方式不能恢复。格式 3 的 64 GiB 单文件/1 TiB 快照是拒绝阈值，不代表上限实测；旧仓库不原地改写。保留/清理默认只预览，隔离与永久清除分别确认。见 [格式](docs/FORMAT.md)、[运维](docs/OPERATIONS.md)、[安全](SECURITY.md)。
 
-## 0.1.0 基础格式的限制与许可（0.2.0 扩展见上文及格式说明）
-
-- 仓库不加密；文件内容和文件名以可读取形式存储。不要将私人备份仓库上传到公开 GitHub。
-- 同盘备份不抵御硬盘损坏。重要数据应放在独立磁盘；挂载 NAS 仅在提供可靠锁、同步和原子重命名语义时适用，尚未经过真实 NAS 验证。
-- 不保存 ACL、所有者、时间戳、链接、稀疏属性或可执行权限；恢复文件采用私有默认权限。特殊文件和链接直接拒绝，不静默遗漏。
-- 不提供数据库热备份或跨文件事务一致性。备份前暂停写入，数据库先使用其官方导出工具。
-- SHA-256 用于完整性检测，不是加密或身份认证；拥有仓库写权限的攻击者仍可重写整套备份。
-- 0.1.0 首版保留全部历史。0.2.0 增加显式确认的隔离/清理，但仍不自动修复损坏对象或默认删除历史数据。
-- 0.1.0 已执行本机及三平台 CI 验证；独立介质、真实 NAS、断电、长期运行与外部用户试点尚未完成，不应当作生产可靠性承诺。
-
-采用 [Apache-2.0](LICENSE)。第三方依赖和算法参考见 [NOTICE](NOTICE) 与 [来源说明](docs/THIRD_PARTY.md)。
+采用 [Apache-2.0](LICENSE)，保留 [NOTICE](NOTICE) 和 [第三方来源](docs/THIRD_PARTY.md)。私人申报书、密钥、备份、报告、SDK 与运行时缓存不公开。

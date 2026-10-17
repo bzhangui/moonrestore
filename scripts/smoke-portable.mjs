@@ -48,12 +48,51 @@ try {
   const drill = run(["drill", repository, snapshot]);
   assert.equal(drill.ok, true);
   assert.equal(drill.post_restore_readback, true);
+  const target = path.join(root, "emergency");
+  const preview = run(["emergency-preview", repository, snapshot, target]);
+  const rescued = run([
+    "emergency-restore",
+    repository,
+    snapshot,
+    target,
+    "--accept-partial",
+    "--confirmation",
+    preview.confirmation,
+  ]);
+  assert.equal(rescued.post_restore_readback, true);
+  assert.equal(
+    fs.readFileSync(path.join(target, "sample.txt"), "utf8"),
+    "controlled portable backup",
+  );
+  assert.equal(run(["scrub", repository]).ok, true);
+  assert.equal(run(["health-status", repository]).ok, true);
+  assert.equal(run(["index-build", repository]).ok, true);
+  assert.equal(run(["index-search", repository, "sample"]).total, 1);
+  assert.equal(run(["provider-rehearsal", repository]).lease_released, true);
+  const { DatabaseSync } = await import("node:sqlite");
+  const database = path.join(root, "app.sqlite"),
+    db = new DatabaseSync(database);
+  try {
+    db.exec(
+      "CREATE TABLE sample(value); INSERT INTO sample VALUES('synthetic packaged SQLite');",
+    );
+  } finally {
+    db.close();
+  }
+  assert.equal(
+    run(["sqlite-backup", repository, database]).post_restore_readback,
+    true,
+  );
   console.log(
     JSON.stringify({
       portable_runtime_smoke: true,
       encrypted_backup: true,
       report: true,
       restore_readback: true,
+      emergency_recovery: true,
+      scrub_and_index: true,
+      provider_lifecycle_rehearsal: true,
+      packaged_sqlite_online_backup: true,
     }),
   );
 } finally {

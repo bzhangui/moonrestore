@@ -17,11 +17,15 @@ pub fn list_snapshots() -> Json raise
 
 pub fn plan_backup(String, Array[String]) -> Json raise
 
+pub fn rescue(String, Array[String], String, apply? : Bool) -> Json raise
+
 pub fn restore(String, String, String, selections? : Array[String]) -> Json raise
 
 pub fn retention_plan(Int, Int, Int, Int, Array[String]) -> Json raise
 
 pub fn run(Array[String]) -> Unit raise
+
+pub fn scrub_snapshot(String, Int, Int, Int64) -> Json raise
 
 pub fn selection_plan(String, Array[String]) -> Json raise
 

@@ -447,6 +447,59 @@ section > p {
 :root {
   font-variant-numeric: tabular-nums;
 }
+.recovery-intro,
+.recovery-subsection > p {
+  max-width: 68ch;
+  line-height: 1.8;
+}
+.recovery-subsection {
+  margin-top: 2rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid var(--line);
+}
+.recovery-versions {
+  display: grid;
+  gap: 0.5rem;
+  margin-block: 1rem;
+}
+.recovery-versions button {
+  text-align: left;
+  overflow-wrap: anywhere;
+}
+#rescue-summary {
+  padding: 1rem;
+  background: #edf4f0;
+  border-left: 3px solid var(--accent);
+  overflow-wrap: anywhere;
+}
+.health-row {
+  display: grid;
+  grid-template-columns: 12rem 1fr;
+  gap: 0.35rem 1rem;
+  padding: 0.8rem 0;
+  border-bottom: 1px solid var(--line);
+}
+.health-row strong {
+  font-family: Consolas, monospace;
+  font-size: 0.85rem;
+  overflow-wrap: anywhere;
+}
+.health-row small {
+  grid-column: 1 / -1;
+  color: var(--muted);
+}
+.health-row[data-state="failed"] span {
+  color: #9a352c;
+  font-weight: 650;
+}
+.health-row[data-state="stale"] span {
+  color: #82581c;
+}
+@media (max-width: 700px) {
+  .health-row {
+    grid-template-columns: 1fr;
+  }
+}
 select,
 textarea {
   font: inherit;

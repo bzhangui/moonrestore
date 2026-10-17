@@ -1,7 +1,7 @@
 ///|
 fn help() -> String {
   let text =
-    #|MoonRestore 0.3 — verifiable incremental backups
+    #|MoonRestore 0.4 — verifiable incremental backups
     #|Usage: node bin/moonrestore.mjs <command> ...
     #|  init <repository>                       Create a NEW repository
     #|  backup <repository> <source>             Backup a directory tree
@@ -17,6 +17,21 @@ fn help() -> String {
     #|  recover <repository>                    Remove dead same-host lock/temp files
     #|  audit <repository> <id|all>              Structured full integrity diagnosis
     #|  catalog <repository> <id>                Validated private file inventory
+    #|  rescue-plan <repository> <id>           Verify rescuable files, no output writes
+    #|  rescue <repository> <id> <NEW-target> --accept-partial true
+    #|  scrub-snapshot <repository> <id> --cursor N --files N --bytes N
+    #|  emergency-preview <repo> <id> <NEW-target> [--key-file FILE]
+    #|  emergency-restore <repo> <id> <NEW-target> --accept-partial --confirmation HASH
+    #|  recovery-checklist <repo> <NEW-private-file>
+    #|  rebuild-copy <repo> <id> <donor> <NEW-repo> [--encrypted]
+    #|  scrub <repo> [--files N --bytes N --snapshot ID]
+    #|  health-status <repo> [--max-age-hours N]
+    #|  index-build <repo> | index-search <repo> <query> [--offset N]
+    #|  sqlite-backup <repo> <database> [--label text --timeout ms]
+    #|  vss-plan <source> | provider-rehearsal <repo>  No native VSS
+    #|  s3-push <repo> <id> --endpoint URL --bucket NAME [--allow-remote]
+    #|  s3-restore <receipt-key> <checksum> <NEW-repo> --endpoint URL --bucket NAME
+    #|    See docs/REMOTE.md for credentials, versions and explicit retention consent
     #|  retention-plan <repository> <keep-last>  Preview only; --daily/weekly/monthly N
     #|  report <repository> [id|all]            Private JSON/HTML report; --details opt-in
     #|  drill <repository> <id>                 Isolated restore and disk readback
@@ -64,7 +79,7 @@ pub fn run(args : Array[String]) -> Unit raise {
     return
   }
   if args[0] == "version" {
-    println("MoonRestore 0.3.1")
+    println("MoonRestore 0.4.0")
     return
   }
   if args[0] == "capacity-state" {
@@ -102,8 +117,10 @@ pub fn run(args : Array[String]) -> Unit raise {
     | "audit"
     | "catalog"
     | "retention-plan"
-    | "selection-plan" => 3
-    "restore" | "diff" => 4
+    | "selection-plan"
+    | "rescue-plan"
+    | "scrub-snapshot" => 3
+    "restore" | "diff" | "rescue" => 4
     _ => raise @core.Invalid("unknown command; use help")
   }
   guard args.length() >= required else {
@@ -119,6 +136,10 @@ pub fn run(args : Array[String]) -> Unit raise {
   let mut daily = 0
   let mut weekly = 0
   let mut monthly = 0
+  let mut accept_partial = false
+  let mut cursor = 0
+  let mut batch_files = 100
+  let mut batch_bytes = 1073741824L
   let protected_ids : Array[String] = []
   let used : Map[String, Bool] = Map([])
   let mut i = required
@@ -144,11 +165,25 @@ pub fn run(args : Array[String]) -> Unit raise {
       ("backup", "--min") => minimum = parse_size(value)
       ("backup", "--avg") => average = parse_size(value)
       ("backup", "--max") => maximum = parse_size(value)
-      ("restore", "--prefix") => {
+      ("restore", "--prefix")
+      | ("rescue", "--prefix")
+      | ("rescue-plan", "--prefix") => {
         prefix = value
         selections.push(value)
       }
       ("selection-plan", "--prefix") => selections.push(value)
+      ("rescue", "--accept-partial") => {
+        guard value == "true" else {
+          raise @core.Invalid(
+            "explicit partial rescue acknowledgement required",
+          )
+        }
+        accept_partial = true
+      }
+      ("scrub-snapshot", "--cursor") => cursor = parse_size(value)
+      ("scrub-snapshot", "--files") => batch_files = parse_size(value)
+      ("scrub-snapshot", "--bytes") =>
+        batch_bytes = @json.from_json(Json(value))
       ("retention-plan", "--daily") => daily = parse_size(value)
       ("retention-plan", "--weekly") => weekly = parse_size(value)
       ("retention-plan", "--monthly") => monthly = parse_size(value)
@@ -202,6 +237,15 @@ pub fn run(args : Array[String]) -> Unit raise {
         verify(args[2])
       }
     "restore" => restore(args[2], args[3], prefix, selections~)
+    "rescue-plan" => rescue(args[2], selections, "")
+    "rescue" => {
+      guard accept_partial else {
+        raise @core.Invalid("use --accept-partial true for explicit rescue")
+      }
+      rescue(args[2], selections, args[3], apply=true)
+    }
+    "scrub-snapshot" =>
+      scrub_snapshot(args[2], cursor, batch_files, batch_bytes)
     "diff" => compare_snapshots(args[2], args[3])
     _ => raise @core.Invalid("unreachable command")
   }

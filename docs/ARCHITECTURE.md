@@ -1,5 +1,9 @@
 # 架构与实现边界
 
+0.4 新增 MoonBit core/recovery.mbt（健康文件选择/巡检范围）及 app/recovery.mbt（逐文件救援/完整校验编排）。platform/recovery-target.mjs 将严格只读源 Host 与受限新目标 writer 分开，避免只读模式拥有源写/恢复写能力。工作台复用同一后端，部分结果和确认失效单独显示。
+
+recovery.mjs 绑定确认、健康供体、独立清单与持久证据；search-index.mjs 是可丢弃非权威缓存；applications.mjs 调用 SQLite 标准在线导出；snapshot-provider.mjs 仅受控租约，无真实 VSS 请求器；s3.mjs/remote.mjs 适配显式授权网络 I/O 和密文副本，最终逻辑清单/内容仍回到 MoonBit audit。没有改变既有仓库编码。
+
 0.2.0 新增 MoonBit `core/maintenance.mbt`（UTC 保留决策和精确容量规则）、`app/health.mbt`（逐文件诊断）、显式大文件 profile 与有界 16 对象校验缓存。缓存只在一次验证操作内存活，命中仍检查引用大小，文件完整哈希仍计算；不使用 mtime 跨运行跳过校验。
 
 Node 新增 `vault.mjs`（系统密码学/DPAPI）、`maintenance.mjs`（调用 MoonBit 的报告、演练、复制编排）、`retention.mjs`（经确认的文件隔离/回收）、`jobs.mjs`（本机调度适配）、`workbench.mjs`（本机 HTTP）与 `ui/`。HTTP 界面和 CLI 复用内核，不维护另一套分块或恢复规则。保留算法仍为 MoonBit；物理 rename/unlink 是有界系统适配。

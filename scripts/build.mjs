@@ -61,8 +61,9 @@ export function versionCheck() {
   return result.stdout.trim();
 }
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
-  if (Number(process.versions.node.split(".")[0]) < 22)
-    throw new Error("Node >= 22 required");
+  const [major, minor] = process.versions.node.split(".").map(Number);
+  if (major < 22 || (major === 22 && minor < 16))
+    throw new Error("Node >= 22.16.0 required (SQLite online backup)");
   versionCheck();
   run(moon, ["update"]);
   run(moon, ["build", "--target", "js", "--release", "--deny-warn"]);

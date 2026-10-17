@@ -11,10 +11,11 @@
     <a class="skip" href="#main">跳到主要内容</a>
     <div class="shell">
       <aside>
-        <div class="brand">MoonRestore<span>本机备份工作台 · 0.3</span></div>
+        <div class="brand">MoonRestore<span>本机备份工作台 · 0.4</span></div>
         <nav aria-label="主导航">
           <a href="#overview">任务概览</a><a href="#setup">配置备份</a
-          ><a href="#versions">版本与恢复</a><a href="#evidence">校验与演练</a>
+          ><a href="#versions">版本与恢复</a><a href="#evidence">校验与演练</a
+          ><a href="#recovery">应急救援与健康</a>
         </nav>
         <div class="boundary">
           <strong>你的文件，留在本机。</strong>
@@ -472,11 +473,154 @@
             打开恢复目录
           </button></template
         >
+        <section id="recovery" aria-labelledby="recovery-heading">
+          <div class="section-title">
+            <h2 id="recovery-heading">应急救援与健康证据</h2>
+            <span>只读源仓库 · 全新恢复目标</span>
+          </div>
+          <p class="recovery-intro">
+            原电脑配置不可用，或某些文件已损坏时，从这里读取已有仓库。救援只发布校验通过的文件；部分恢复不是完整成功，原仓库不被修补或覆盖。
+          </p>
+          <form id="rescue-form">
+            <div class="form-grid">
+              <label
+                >已有仓库路径<input
+                  id="rescue-repository"
+                  required
+                  autocomplete="off"
+                  placeholder="E:\MoonRestoreVault"
+              /></label>
+              <label
+                >独立恢复密钥文件（可选）<input
+                  id="rescue-key"
+                  autocomplete="off"
+                /><small
+                  >只使用该文件解锁，不依赖旧账号；不写入浏览器存储。</small
+                ></label
+              >
+              <label
+                >快照 ID<input
+                  id="rescue-snapshot"
+                  required
+                  pattern="[a-f0-9]{64}"
+                  autocomplete="off"
+              /></label>
+              <label
+                >全新恢复目录<input
+                  id="rescue-target"
+                  required
+                  autocomplete="off"
+                  placeholder="D:\RecoveredPapers"
+              /></label>
+            </div>
+            <div class="actions">
+              <button id="emergency-list" class="secondary" type="button">
+                读取只读版本</button
+              ><button type="submit">预览可救援文件</button>
+            </div>
+            <div
+              id="emergency-snapshots"
+              class="recovery-versions"
+              aria-live="polite"
+            ></div>
+            <p id="rescue-summary" role="status">
+              尚未检查。先读取版本并预览，程序不会自动开始恢复。
+            </p>
+            <label class="check"
+              ><input
+                id="accept-partial"
+                type="checkbox"
+              />我接受明确标注缺失文件的部分恢复，并确认目标为全新目录。</label
+            >
+            <button id="rescue-confirm" type="button" disabled>
+              确认救援到新目录
+            </button>
+          </form>
+          <div class="recovery-subsection">
+            <h3>持续巡检</h3>
+            <p>
+              按所选仓库读取历史证据，或实际检查一批文件。绿色仅表示证据窗口内已完成校验，不保证未来可恢复；新仓库、过期和未检查分别显示。
+            </p>
+            <div class="form-grid">
+              <label
+                >每批最多文件<input
+                  id="scrub-files"
+                  type="number"
+                  min="1"
+                  max="1000"
+                  value="100" /></label
+              ><label
+                >每批最多字节<input
+                  id="scrub-bytes"
+                  inputmode="numeric"
+                  value="268435456"
+              /></label>
+            </div>
+            <div class="actions">
+              <button id="health-status" class="secondary" type="button">
+                查看恢复健康</button
+              ><button id="scrub-run" type="button">执行一批实际巡检</button>
+            </div>
+            <div id="health-evidence" class="empty" aria-live="polite">
+              尚无读取结果。不会把没有证据显示为通过。
+            </div>
+          </div>
+          <div class="recovery-subsection">
+            <h3>恢复准备与副本重建</h3>
+            <label
+              >新准备清单文件路径<input
+                id="checklist-output"
+                autocomplete="off"
+                placeholder="F:\Private\recovery-checklist.json"
+            /></label>
+            <p class="muted">
+              清单不含密钥或文件名；密钥必须另行私有保管。清单不是恢复成功证明。
+            </p>
+            <button id="checklist-export" class="secondary" type="button">
+              导出新准备清单
+            </button>
+            <details>
+              <summary>从健康副本重建当前快照</summary>
+              <p>
+                只重建上方所选快照到全新仓库。两个来源都保留，找不到健康内容时不发布目标。
+              </p>
+              <div class="form-grid">
+                <label
+                  >健康副本仓库<input
+                    id="rebuild-donor"
+                    autocomplete="off" /></label
+                ><label
+                  >全新重建仓库<input
+                    id="rebuild-target"
+                    autocomplete="off" /></label
+                ><label
+                  >新加密仓库密码（源加密时必填）<input
+                    id="rebuild-password"
+                    type="password"
+                    autocomplete="new-password"
+                  /><small
+                    >副本加密时先在现有密钥管理中解锁该副本；密码不会保存到配置。</small
+                  ></label
+                >
+              </div>
+              <label class="check"
+                ><input
+                  id="rebuild-accept"
+                  type="checkbox"
+                />确认仅创建新仓库，不覆盖或清理原始仓库。</label
+              >
+              <button id="rebuild-run" class="secondary" type="button" disabled>
+                重建并完整校验
+              </button>
+            </details>
+          </div>
+        </section>
         <footer>
           MoonRestore · Apache-2.0 ·
           保留源文件，保护恢复密钥。当前页面不代表公网服务或生产可靠性认证。
         </footer>
         <script type="module" src="/enhancements.js"></script>
+        <script type="module" src="/recovery.js"></script>
       </main>
     </div>
   </body>

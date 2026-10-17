@@ -57,6 +57,12 @@ async function api(route, body) {
       "key-drill",
       "capacity",
       "prune-preview",
+      "emergency-list",
+      "rescue-preview",
+      "rescue-apply",
+      "recovery-health",
+      "scrub",
+      "rebuild-copy",
     ].includes(route)
   ) {
     const minutes =
