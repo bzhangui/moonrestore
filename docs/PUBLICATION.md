@@ -1,5 +1,11 @@
 # 发布核验记录
 
+## 0.6.0 源码维护（2026-10-18，暂不发布 Mooncakes）
+
+用户授权完成测试/隐私核查后推送 bzhangui/moonrestore main，明确暂不发布 Mooncakes。源码新增统一计划调度、分项健康、保护策略、标准签名/锚点、独立救援和维护工具；范围见 RELIABILITY_0_6 / UPGRADE_EXECUTION。30 核心用例 × 四目标及包隐私通过；完整本机与末次取消修复回归、真实浏览器、>2 GiB 恢复、三轮重复恢复、真实旧包与本地独立包结果见 QUALITY_REPORT。
+
+原生 PostgreSQL 与三平台 CI 以本次 main 对应精确 SHA 的 [Actions](https://github.com/bzhangui/moonrestore/actions/workflows/ci.yml) 为准，不将旧版 CI 或本机替身算作新提交的数据库证据。使用 GitHub noreply 提交邮箱，不上传私人申报书/原始报告/密钥/备份/SDK/运行时缓存，不发布运行包附件。0.5.0 注册表已再次独立消费验证；不执行新的 moon publish/撤回，不覆盖旧包。以下为历史正式发布与源码记录。
+
 ## 0.5.0 正式发布（2026-10-17）
 
 用户在 82d7223 源码四项 CI 全部成功后，另行明确授权“推送至 mooncakes”。现已发布 [bzhangui/moonrestore@0.5.0](https://mooncakes.io/docs/bzhangui/moonrestore)，不覆盖或撤回旧版。申报书、密钥、备份、私有报告、SDK 和运行时缓存不公开，桌面运行包不随注册表发布。
