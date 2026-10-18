@@ -28,6 +28,8 @@ Windows x64，项目私有 moonc 0.10.15+943464bfa / moon 0.1.20261012、Node 24
 
 默认复现 `npm run validate`；专项见 RELIABILITY_0_6。Windows 任务 XML/精确确认门禁已测试，独立授权的真实系统任务演练不在默认验证中，本轮尚未实际注册。分段 live 清单、对象 pack、原生 VSS、WAL/PITR、发布者代码签名未实现，真实云/物理断电/长期生产未验证。五阶段路线不能整体标成完成，剩余范围见 UPGRADE_EXECUTION。远端提交与 CI 按 PUBLICATION / Actions 的对应 SHA 核对。
 
+远端精确 `bbabe10` 的 [CI 39101210940](https://github.com/bzhangui/moonrestore/actions/runs/39101210940) 四项全部成功：Windows 125 通过/1 PG 专项跳过；Ubuntu/macOS 各 121 通过/5 跳过（4 Windows 专项 + 1 PG），均 0 失败；三平台运行包和四目标通过。单独原生 PostgreSQL 16 作业 **1 通过/0 跳过**，实际新库恢复并验证行数/长字段。不是生产或外部试点。最终包的可选签名核验入口还以临时合成密钥实际验证通过，不将测试密钥称为发布者证书。
+
 ## 0.5.0 可靠任务与运输归档（2026-10-17）
 
 Windows x64，项目私有 moonc 0.10.15+943464bfa / moon 0.1.20261012，Node 24.15.0。以下是开发维护阶段实际执行，0.4 及更早章节均为历史记录。源码推送、精确提交 CI 及后续授权的 Mooncakes 发布与独立消费另见 PUBLICATION。

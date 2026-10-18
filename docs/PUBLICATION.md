@@ -6,6 +6,12 @@
 
 原生 PostgreSQL 与三平台 CI 以本次 main 对应精确 SHA 的 [Actions](https://github.com/bzhangui/moonrestore/actions/workflows/ci.yml) 为准，不将旧版 CI 或本机替身算作新提交的数据库证据。使用 GitHub noreply 提交邮箱，不上传私人申报书/原始报告/密钥/备份/SDK/运行时缓存，不发布运行包附件。0.5.0 注册表已再次独立消费验证；不执行新的 moon publish/撤回，不覆盖旧包。以下为历史正式发布与源码记录。
 
+- 功能提交 `793f5f2` 和维护记录提交 `bbabe105605d5d42a5f8b76a2813e373d3bef61d` 已推送，远端 SHA 一致、公开树隐私检查通过。
+- 对精确 bbabe10 的 [CI 39101210940](https://github.com/bzhangui/moonrestore/actions/runs/39101210940) 四项作业全部成功。Windows 126 项中 125 通过/1 原生 PG 跳过；Ubuntu/macOS 各 121 通过/5 跳过（4 Windows 专项与 1 原生 PG），0 失败；三平台四目标/样例、437/470 核心覆盖率与运行包冒烟通过。普通包 Windows 63 文件、Unix 64 文件；Windows 原生启动器编译通过。
+- 独立 PostgreSQL 作业真实运行 PostgreSQL 16、pg_dump/pg_restore、新库 SQL 恢复及行数/长字段断言，**1 通过/0 跳过**。不能把普通平台作业的原生 PG 跳过混作该项未验证，也不能把这个一次性实例说成生产验证。
+- 最终私有 Windows 内置 Node 包 69 文件，新旧功能冒烟全部通过，无全局 Node 的原生宿主预检/启动/停止通过。可选整包签名核验分支使用临时合成密钥实际通过，测试密钥夹具清理；EXE 仍未取得发布者代码签名。
+- 后续本节纯文档证据补录不改变 bbabe10 的功能代码，补录提交自身状态仍以对应 Actions 为准，不伪造或覆盖注册表版本。真实系统任务注册/执行本轮仍未进行。
+
 ## 0.5.0 正式发布（2026-10-17）
 
 用户在 82d7223 源码四项 CI 全部成功后，另行明确授权“推送至 mooncakes”。现已发布 [bzhangui/moonrestore@0.5.0](https://mooncakes.io/docs/bzhangui/moonrestore)，不覆盖或撤回旧版。申报书、密钥、备份、私有报告、SDK 和运行时缓存不公开，桌面运行包不随注册表发布。
