@@ -11,6 +11,7 @@
 - 独立 PostgreSQL 作业真实运行 PostgreSQL 16、pg_dump/pg_restore、新库 SQL 恢复及行数/长字段断言，**1 通过/0 跳过**。不能把普通平台作业的原生 PG 跳过混作该项未验证，也不能把这个一次性实例说成生产验证。
 - 最终私有 Windows 内置 Node 包 69 文件，新旧功能冒烟全部通过，无全局 Node 的原生宿主预检/启动/停止通过。可选整包签名核验分支使用临时合成密钥实际通过，测试密钥夹具清理；EXE 仍未取得发布者代码签名。
 - 后续本节纯文档证据补录不改变 bbabe10 的功能代码，补录提交自身状态仍以对应 Actions 为准，不伪造或覆盖注册表版本。真实系统任务注册/执行本轮仍未进行。
+- 后续 CI 环境维护依据 [GitHub 官方 runner-images #14748](https://github.com/actions/runner-images/issues/14748)，Linux 验收固定为 Ubuntu 24.04，不自动跟随 ubuntu-latest 的 26.04 迁移；不更换用户系统或存储格式。此配置修改的成功状态以对应新提交 Actions 为准，不能拿上述旧运行冒充。Windows/macOS、Node 22 与当前稳定 MoonBit 的兼容测试继续保留，并非整个工具链字节级可复现构建。
 
 ## 0.5.0 正式发布（2026-10-17）
 
