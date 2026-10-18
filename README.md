@@ -4,9 +4,11 @@
 
 [公开源码](https://github.com/bzhangui/moonrestore) · [CI](https://github.com/bzhangui/moonrestore/actions) · [Mooncakes 0.5.0](https://mooncakes.io/docs/bzhangui/moonrestore) · [测试报告](docs/QUALITY_REPORT.md) · [更新记录](CHANGELOG.md)
 
-## 当前版本：0.5.0
+## 当前源码：0.6.0 开发版；Mooncakes：0.5.0
 
 使用 `moon add bzhangui/moonrestore@0.5.0` 安装 MoonBit 核心库，包含 0.4/0.5 新增恢复、巡检和操作规则 API；0.3.0 旧包不包含这些接口。CLI/工作台仍需按下文从源码构建，Mooncakes 不是 Windows 桌面二进制下载。[验收进度](docs/ACCEPTANCE.md) 与 [发布记录](docs/PUBLICATION.md) 区分注册表发布、本机、远端及历史结果；以发布记录中的实际查询、哈希与独立消费结果为准。
+
+0.6 源码新增统一计划显式调度、同快照分项健康、固定恢复点/保护窗口、Ed25519 签名及独立救援包、脱敏诊断和提供器兼容门禁。本轮不发布新的 Mooncakes；新增核心 API 不能从注册表 0.5.0 获得。见 [使用说明](docs/RELIABILITY_0_6.md) 与 [实施范围](docs/UPGRADE_EXECUTION.md)。无人值守必须显式启用；不自动注册服务、保存明文密码或永久清理备份。
 
 | 能力 | 当前行为和边界 |
 | --- | --- |
@@ -20,7 +22,7 @@
 | S3 兼容副本 | 显式联网，仅加密源，SigV4、条件不覆盖写、读回校验、固定摘要下载；本机模拟通过，真实供应商待验证 |
 | 本机工作台 | 任务、历史、选择恢复、会话解锁、进度/取消、应急救援与健康证据；仅回环 |
 | 可靠任务与续作 | 私有身份绑定日志；备份文件级检查点、恢复前缀比对及发布后独立读回；取消/中断保留旧版本 |
-| 统一应用计划 | 文件/SQLite/PostgreSQL，分项证据、容量/源异常及清理保护；必须显式运行，不自动连接远端 |
+| 统一应用计划 | 文件/SQLite/PostgreSQL，分项证据、容量/源异常及清理保护；默认手动，0.6 源码可显式配置调度，不隐式连接远端 |
 | 分段运输归档 | 有界页/段、可选压缩、外部固定根摘要，导入完整审计后新建仓库；不改 live 仓库格式 |
 | PostgreSQL | 单库 custom 导出、全归档展开检查及文件恢复演练；不是集群/PITR，不自动恢复生产库 |
 

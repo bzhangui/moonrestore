@@ -99,7 +99,9 @@ try {
     });
   }
   const report = {
-    version: "0.5.0",
+    version: JSON.parse(
+      fs.readFileSync(new URL("../package.json", import.meta.url)),
+    ).version,
     kind: "compatibility_and_codec_evaluation",
     ok: true,
     actual_baseline: "0.2.0",

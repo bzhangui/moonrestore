@@ -4,6 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import { removeOwned } from "../platform/maintenance.mjs";
 const bundle = path.resolve(process.argv[2] || "");
 if (!fs.statSync(path.join(bundle, "manifest.json")).isFile())
@@ -115,6 +116,96 @@ try {
   );
   const plan = run(["plan-save", config]);
   assert.equal(run(["plan-run", plan.id]).ok, true);
+  const schedule = path.join(root, "private-schedule.json");
+  fs.writeFileSync(
+    schedule,
+    JSON.stringify({ enabled: true, intervalMinutes: 1440 }),
+  );
+  assert.equal(
+    run(["plan-schedule", plan.id, schedule, "--confirm", plan.id]).ok,
+    true,
+  );
+  assert.equal(run(["plan-run-due"]).results[0].ok, true);
+  const protection = path.join(root, "private-protection.json");
+  fs.writeFileSync(
+    protection,
+    JSON.stringify({ minimumDays: 30, pins: [durable.snapshot] }),
+  );
+  const previewProtection = run(["protection-preview", repository, protection]);
+  assert.equal(
+    run([
+      "protection-apply",
+      repository,
+      protection,
+      "--confirm",
+      previewProtection.confirmation,
+    ]).pins_content_verified,
+    true,
+  );
+  env.MOONRESTORE_SIGNING_PASSWORD = "synthetic-portable-signing-only";
+  const keys = path.join(root, "signing-keys"),
+    signature = path.join(root, "manifest-signature.json"),
+    manifest = path.join(bundle, "manifest.json"),
+    manifestHash = createHash("sha256")
+      .update(fs.readFileSync(manifest))
+      .digest("hex");
+  run(["signing-key-create", keys]);
+  const signed = run([
+    "artifact-sign",
+    manifest,
+    path.join(keys, "private.pem"),
+    signature,
+    "--subject",
+    "package",
+  ]);
+  assert.equal(
+    run([
+      "artifact-verify",
+      manifest,
+      signature,
+      path.join(keys, "public.pem"),
+      "--anchor",
+      path.join(root, "anchor.json"),
+      "--trust",
+      signed.attestation_hash,
+    ]).signature_verified,
+    true,
+  );
+  const kit = path.join(root, "offline-kit"),
+    rescue = run([
+      "rescue-kit",
+      repository,
+      durable.snapshot,
+      kit,
+      "--bundle",
+      bundle,
+      "--bundle-sha256",
+      manifestHash,
+    ]);
+  assert.equal(rescue.key_included, false);
+  assert.equal(
+    run(["rescue-check", kit, rescue.recipe_sha256, repository])
+      .content_verified,
+    false,
+  );
+  const rescuedTarget = path.join(root, "offline-restored");
+  assert.equal(
+    run([
+      "rescue-restore",
+      kit,
+      rescue.recipe_sha256,
+      repository,
+      rescuedTarget,
+    ]).post_restore_readback,
+    true,
+  );
+  assert.equal(
+    fs.readFileSync(path.join(rescuedTarget, "sample.txt"), "utf8"),
+    "controlled portable backup",
+  );
+  const support = run(["support-report"]);
+  assert.equal(JSON.stringify(support).includes(root), false);
+  assert.equal(support.secrets_included, false);
   env.MOONRESTORE_DEST_PASSWORD = "synthetic-new-key-password";
   const migrated = path.join(root, "new-key");
   assert.equal(
@@ -137,6 +228,11 @@ try {
       segmented_archive: true,
       unified_plan: true,
       new_key_migration: true,
+      plan_scheduler: true,
+      recovery_point_protection: true,
+      detached_signature_and_anchor: true,
+      offline_rescue_fresh_state: true,
+      allowlisted_diagnostics: true,
     }),
   );
 } finally {

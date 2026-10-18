@@ -303,6 +303,56 @@ try {
   await done();
   assert.equal((await result()).ok, true);
   const durableSnapshot = (await result()).evidence.backup.snapshot;
+  const scheduleRow = page.locator("#durable-plans");
+  await scheduleRow
+    .getByRole("checkbox", {
+      name: "允许计划自动执行：浏览器受控可靠计划",
+      exact: true,
+    })
+    .check();
+  await scheduleRow
+    .getByRole("spinbutton", {
+      name: "执行间隔：浏览器受控可靠计划",
+      exact: true,
+    })
+    .fill("60");
+  await scheduleRow
+    .getByRole("button", { name: "确认调度设置", exact: true })
+    .click();
+  await done();
+  await scheduleRow.getByText("调度状态：ready", { exact: true }).waitFor();
+  assert.equal(
+    await scheduleRow
+      .getByRole("checkbox", {
+        name: "允许计划自动执行：浏览器受控可靠计划",
+        exact: true,
+      })
+      .isChecked(),
+    true,
+  );
+  await scheduleRow
+    .getByRole("checkbox", {
+      name: "允许计划自动执行：浏览器受控可靠计划",
+      exact: true,
+    })
+    .uncheck();
+  await scheduleRow
+    .getByRole("button", { name: "确认调度设置", exact: true })
+    .click();
+  await done();
+  assert.equal(
+    await scheduleRow
+      .getByRole("checkbox", {
+        name: "允许计划自动执行：浏览器受控可靠计划",
+        exact: true,
+      })
+      .isChecked(),
+    false,
+  );
+  await scheduleRow.scrollIntoViewIfNeeded();
+  await page.screenshot({
+    path: path.join(resultDir, "schedules-desktop.png"),
+  });
   await page
     .locator("#durable-restore-form")
     .evaluate((n) => (n.closest("details").open = true));
@@ -365,6 +415,7 @@ try {
       "persistent scrub unknown to full-cycle health evidence",
       "key-free recovery checklist and rebuild consent invalidation",
       "reliable plan create backup verify drill and separate evidence",
+      "explicit plan scheduler enable interval and disable via rendered controls",
       "durable complete restore with new target consent and disk readback",
     ],
     screenshot_files: ["desktop.png", "mobile.png"],

@@ -1,7 +1,12 @@
 import fs from "node:fs";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
-import {assertCleanupGuard}from './plans.mjs';
+import { assertCleanupGuard } from "./plans.mjs";
+import {
+  protectRetention,
+  assertPurgeProtection,
+  protectionRevision,
+} from "./recovery-policy.mjs";
 import { checked, readPrivate, writePrivate, mkdirPrivate } from "./vault.mjs";
 import {
   core,
@@ -82,7 +87,9 @@ export async function previewPrune(
       "--monthly",
       String(monthly),
     ];
-  for (const p of protect) args.push("--protect", p);
+  const protection = protectRetention(repository, inventory.snapshots);
+  for (const p of new Set([...protect, ...protection.pins]))
+    args.push("--protect", p);
   if (inventory.snapshots.some((s) => Date.parse(s.model.created) > Date.now()))
     throw new Error("Future-dated snapshot; retention refused");
   const policy = await core(args);
@@ -130,6 +137,7 @@ export async function previewPrune(
     kind: "retention_preview",
     repository_identity: repositoryIdentity(repository),
     state: inventory.before,
+    protection: protection.policy,
     keep: policy.keep,
     remove: policy.remove,
     entries,
@@ -158,12 +166,15 @@ export async function applyPrune(repository, settings, confirmation) {
     host.lock();
     if (fingerprint(repository) !== preview.plan.state)
       throw new Error("Repository changed after preview");
+    if (protectionRevision(repository) !== preview.plan.protection)
+      throw new Error("Recovery-point protection changed after preview");
     mkdirPrivate(dir);
     const record = {
       format: 1,
       batch,
       created: new Date().toISOString(),
       repository_identity: preview.plan.repository_identity,
+      snapshots: preview.plan.remove,
       entries: preview.plan.entries,
     };
     writePrivate(path.join(dir, "manifest.json"), JSON.stringify(record));
@@ -249,8 +260,9 @@ export function recoverMaintenance(repository, confirmation, { batch } = {}) {
   }
 }
 export function purgePreview(repository, batch, { now = Date.now() } = {}) {
-  assertCleanupGuard(repository,now);
+  assertCleanupGuard(repository, now);
   const { dir, record } = loadBatch(repository, batch);
+  assertPurgeProtection(repository, record, now);
   if (fs.existsSync(path.join(dir, "restored.json")))
     throw new Error("Quarantine was restored");
   const eligible = now - Date.parse(record.created) >= 7 * 86400000;
@@ -276,6 +288,7 @@ export function purge(
   try {
     host.lock();
     const { dir, record } = loadBatch(repository, batch);
+    assertPurgeProtection(repository, record, now);
     for (const entry of record.entries) {
       const file = entryPath(dir, entry.relative);
       if (

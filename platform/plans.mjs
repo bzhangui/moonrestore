@@ -219,17 +219,46 @@ export function planStatus(id, now = Date.now()) {
   const r = loadPlan(id),
     e = r.evidence,
     age = e.backup ? now - Date.parse(e.backup.finished) : null;
+  const snapshot = e.backup?.snapshot;
+  const stages = {};
+  for (const key of ["backup", "verified", "drill", "replica", "remote"]) {
+    const point = e[key],
+      required = !["replica", "remote"].includes(key) || !!r.config[key],
+      finished = point && Date.parse(point.finished),
+      pointAge = point ? now - finished : null;
+    const state = !point
+      ? "unknown"
+      : !/^[a-f0-9]{64}$/.test(snapshot || "")
+        ? "invalid"
+        : point.snapshot !== snapshot
+          ? "different_snapshot"
+          : !Number.isFinite(finished) || !Number.isSafeInteger(now)
+            ? "invalid"
+            : pointAge < 0
+              ? "future"
+              : pointAge > r.config.rpoHours * 3600000
+                ? "stale"
+                : "current";
+    stages[key] = {
+      required,
+      state,
+      age_ms: Number.isFinite(pointAge) ? pointAge : null,
+      finished: point?.finished ?? null,
+      snapshot: point?.snapshot ?? null,
+    };
+  }
+  const running = fs.existsSync(planFile(id) + ".lock");
   return {
     ok:
-      !!e.verified &&
-      !!e.drill &&
-      age !== null &&
-      age >= 0 &&
-      age <= r.config.rpoHours * 3600000 &&
-      !r.lastError,
+      !running &&
+      !r.activeOperation &&
+      !r.lastError &&
+      Object.values(stages).every((s) => !s.required || s.state === "current"),
     id,
     config: r.config,
     evidence: e,
+    stages,
+    running,
     backup_age_ms: age,
     observed_restore_ms: e.drill?.durationMs ?? null,
     production_rto_guaranteed: false,
@@ -438,7 +467,6 @@ export async function runPlan(
       },
       id,
     );
-    return planStatus(id);
   } catch (error) {
     r.lastError = "plan_failed";
     r.updated = Math.max(r.updated, Date.now());
@@ -448,6 +476,7 @@ export async function runPlan(
     fs.unlinkSync(path.join(checked(lock), "owner.json"));
     fs.rmdirSync(lock);
   }
+  return planStatus(id);
 }
 export async function planCommand(args) {
   const [command, ...rest] = args;

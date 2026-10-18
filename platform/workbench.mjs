@@ -41,6 +41,11 @@ import {
 import { randomUUID } from "node:crypto";
 import { savePlan, listPlans, runPlan } from "./plans.mjs";
 import {
+  configureSchedule,
+  scheduledPlans,
+  runDuePlans,
+} from "./plan-scheduler.mjs";
+import {
   createOperation,
   runOperation,
   operationStatus,
@@ -154,6 +159,12 @@ export async function startWorkbench({
         return listPlans();
       case "plan-save":
         return savePlan(p);
+      case "plan-schedules":
+        object(p, []);
+        return scheduledPlans();
+      case "plan-schedule":
+        object(p, ["id", "config", "confirmation"]);
+        return configureSchedule(p.id, p.config, p.confirmation);
       case "plan-run":
         object(p, ["id", "recover", "acceptAnomaly"]);
         return runPlan(p.id, {
@@ -431,6 +442,8 @@ export async function startWorkbench({
     "plans",
     "plan-save",
     "plan-run",
+    "plan-schedules",
+    "plan-schedule",
     "operation-status",
     "operation-resume",
     "restore-resumable",
@@ -662,6 +675,19 @@ export async function startWorkbench({
     ? setInterval(() => {
         if (closing || busy || tasks.state()?.status === "running") return;
         try {
+          const nextPlan = scheduledPlans().schedules.find(
+            (s) =>
+              s.enabled &&
+              s.state !== "blocked" &&
+              (s.overdue || s.clock_discontinuity || s.state === "running"),
+          );
+          if (nextPlan) {
+            tasks.start(() => runDuePlans(), {
+              minutes: nextPlan.maxRuntimeMinutes,
+              credentials: captureCredentials(),
+            });
+            return;
+          }
           const due = listJobs().find((j) => j.automatic && j.overdue);
           if (due)
             tasks.start(() => runJob(due.id), {

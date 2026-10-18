@@ -606,6 +606,10 @@ button:not(:disabled):active {
 .durable-row button {
   justify-self: start;
 }
+.durable-schedule,
+.durable-schedule .check {
+  grid-column: 1 / -1;
+}
 #durable-operations details {
   padding-block: 1rem;
   border-block-start: 1px solid var(--line);

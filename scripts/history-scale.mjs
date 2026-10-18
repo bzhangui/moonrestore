@@ -86,7 +86,9 @@ try {
   assert.equal(batches, 5);
   const report = {
     ok: true,
-    version: "0.5.0",
+    version: JSON.parse(
+      fs.readFileSync(new URL("../package.json", import.meta.url)),
+    ).version,
     kind: "history_scale",
     controlled_sample: true,
     production_benchmark: false,

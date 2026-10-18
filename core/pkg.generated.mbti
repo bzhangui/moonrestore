@@ -26,6 +26,8 @@ pub fn digest(Bytes) -> String
 
 pub fn encode_with_metadata(Snapshot, Array[FileMetadata], limits? : Limits) -> String raise
 
+pub fn evidence_state(String, String, Int64, Int64, Int64) -> Int raise
+
 pub fn operation_transition(String, String) -> Bool
 
 pub fn path_order(String, String) -> Int
@@ -33,6 +35,8 @@ pub fn path_order(String, String) -> Int
 pub fn rescue_entries(Snapshot, Array[String], Array[String]) -> Array[Entry] raise BackupError
 
 pub fn retention_keep(Array[RetentionRecord], Int, Int, Int, Int, Array[String]) -> Array[String] raise BackupError
+
+pub fn schedule_due(Bool, Bool, Int, Int, Int64, Int64, Int64, Int64) -> Bool raise
 
 pub fn select_entries(Snapshot, Array[String]) -> Array[Entry] raise BackupError
 

@@ -4,10 +4,8 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";
 import { moon, moonEnv, versionCheck } from "./build.mjs";
-const sourceVersion = fs
-  .readFileSync(new URL("../moon.mod", import.meta.url), "utf8")
-  .match(/^version\s*=\s*"([^"]+)"/m)?.[1];
-const version = process.argv[2] || sourceVersion;
+// Source development versions are not automatically published.
+const version = process.argv[2] || "0.5.0";
 if (!/^\d+\.\d+\.\d+$/.test(version))
   throw new Error("Expected an explicit release version");
 const [major, minor] = version.split(".").map(Number),

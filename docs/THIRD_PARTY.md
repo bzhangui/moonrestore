@@ -8,6 +8,7 @@
 | Windows 原生启动器 | 原创 `platform/windows/Launcher.cs` | 调用系统 .NET Framework / Windows Forms；不分发系统组件 | 项目代码 Apache-2.0；系统组件按 Windows 条款 |
 | C 目录提交辅助程序 | 本项目 `platform/rename_noreplace.c` | Linux renameat2 / macOS renamex_np 排他重命名 | Apache-2.0 |
 | 运输归档压缩 | Node 内置 zlib | 有界独立段 deflate/raw；不另行打包压缩库 | 随 Node 完整上游许可保留 |
+| Ed25519 文件签名 | Node 标准 crypto/OpenSSL | generateKeyPair/sign/verify；私钥为密码加密 PKCS8，不内嵌新密码库 | 随 Node 完整上游许可保留 |
 | PostgreSQL 客户端 | 用户单独安装 pg_dump / pg_restore；CI 一次性 PostgreSQL 16 | 调用可信绝对路径；不复制或分发 PostgreSQL 工具 | [PostgreSQL 许可](https://www.postgresql.org/about/licence/)；项目适配代码 Apache-2.0 |
 
 本项目是原创备份应用，不是 HookLab/MoonMQTT 的改名，也不是 Restic 或 MoonChunk 的代码移植。CDC 使用通用 Gear 滚动指纹思路，确定性表由本项目种子公式生成；指纹只决定分块边界，实际对象身份使用 SHA-256。

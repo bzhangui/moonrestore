@@ -28,7 +28,9 @@ try {
   const vss = await vssPreflight(root),
     device = await deviceRelation(root, root);
   const report = {
-    version: "0.5.0",
+    version: JSON.parse(
+      fs.readFileSync(new URL("../package.json", import.meta.url)),
+    ).version,
     kind: "windows_desktop_qa",
     ok: true,
     embedded_runtime_without_global_node: true,

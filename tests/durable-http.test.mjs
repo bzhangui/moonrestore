@@ -47,6 +47,44 @@ test("authenticated durable HTTP plans, status and confirmed resumable restore v
     assert.equal(saved.status, 200);
     assert.equal((await request("plans", {})).body.plans.length, 1);
     assert.equal(
+      (await request("plan-schedules", {})).body.schedules.length,
+      0,
+    );
+    assert.equal(
+      (
+        await request("plan-schedule", {
+          id: saved.body.id,
+          config: { enabled: true, password: "never-store" },
+          confirmation: saved.body.id,
+        })
+      ).status,
+      400,
+    );
+    assert.equal(
+      (
+        await request("plan-schedule", {
+          id: saved.body.id,
+          config: { enabled: true, intervalMinutes: 1440 },
+          confirmation: "wrong",
+        })
+      ).status,
+      400,
+    );
+    assert.equal(
+      (
+        await request("plan-schedule", {
+          id: saved.body.id,
+          config: { enabled: true, intervalMinutes: 1440 },
+          confirmation: saved.body.id,
+        })
+      ).body.ok,
+      true,
+    );
+    assert.equal(
+      (await request("plan-schedules", {})).body.schedules.length,
+      1,
+    );
+    assert.equal(
       (
         await request("restore-resumable", {
           repository: f.repo,

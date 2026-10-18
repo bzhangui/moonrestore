@@ -9,6 +9,7 @@ const feedback = (text) => {
 };
 async function renderPlans() {
   const result = await api("plans", {}),
+    schedules = (await api("plan-schedules", {})).schedules,
     list = $("durable-plans");
   list.replaceChildren();
   if (!result.plans.length) {
@@ -35,12 +36,22 @@ async function renderPlans() {
     ];
     for (const [key, label] of labels) {
       const point = p.evidence[key];
+      const names = {
+        current: "当前快照/窗口内",
+        unknown: "未完成",
+        stale: "已过期",
+        future: "时间异常",
+        different_snapshot: "属于旧快照",
+        invalid: "记录无效",
+      };
       evidence.append(
         element(
           "span",
           label +
             "：" +
-            (point ? new Date(point.finished).toLocaleString() : "未完成"),
+            (point ? new Date(point.finished).toLocaleString() : "未完成") +
+            " · " +
+            (names[p.stages?.[key]?.state] || "未知"),
         ),
       );
     }
@@ -67,7 +78,61 @@ async function renderPlans() {
         );
         await renderPlans();
       });
-    row.append(title, evidence, state, button);
+    const schedule = schedules.find((s) => s.id === p.id),
+      controls = document.createElement("div"),
+      label = element(
+        "label",
+        "允许此计划在已开启自动运行的工作台/显式 runner 中执行（不会注册系统服务）",
+      ),
+      consent = document.createElement("input"),
+      interval = document.createElement("input"),
+      intervalLabel = element("label", "执行间隔（分钟）"),
+      save = element("button", "确认调度设置");
+    consent.type = "checkbox";
+    label.className = "check";
+    controls.className = "form-grid durable-schedule";
+    consent.checked = schedule?.enabled === true;
+    consent.setAttribute("aria-label", "允许计划自动执行：" + p.config.name);
+    label.prepend(consent);
+    interval.type = "number";
+    interval.min = "1";
+    interval.max = "10080";
+    interval.value = String(schedule?.intervalMinutes ?? 1440);
+    interval.setAttribute("aria-label", "执行间隔：" + p.config.name);
+    intervalLabel.append(interval);
+    save.type = "button";
+    save.className = "secondary";
+    save.onclick = () =>
+      action(async () => {
+        await api("plan-schedule", {
+          id: p.id,
+          confirmation: p.id,
+          config: {
+            enabled: consent.checked,
+            intervalMinutes: Number(interval.value),
+          },
+        });
+        feedback(
+          "调度设置已保存；只有显式 runner 或已启用自动运行的工作台才会执行，凭据不落盘。",
+        );
+        await renderPlans();
+      });
+    controls.append(
+      label,
+      intervalLabel,
+      element(
+        "p",
+        schedule
+          ? "调度状态：" +
+              (schedule.clock_discontinuity
+                ? "clock_discontinuity"
+                : schedule.state) +
+              (schedule.reason ? " / " + schedule.reason : "")
+          : "调度未启用",
+      ),
+      save,
+    );
+    row.append(title, evidence, state, button, controls);
     list.append(row);
   }
 }

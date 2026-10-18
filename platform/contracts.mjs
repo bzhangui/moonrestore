@@ -38,6 +38,24 @@ export function requireCapabilities(name, required) {
 export function providerCatalog() {
   return Object.keys(definitions).map(providerCapabilities);
 }
+export function negotiateProvider(request) {
+  if (
+    !request ||
+    typeof request !== "object" ||
+    Array.isArray(request) ||
+    Object.keys(request).some(
+      (k) => !["provider", "contract", "required"].includes(k),
+    ) ||
+    request.contract !== CONTRACT_VERSION ||
+    !Array.isArray(request.required) ||
+    request.required.length > 16
+  )
+    throw new Error("Unsupported provider contract/fields");
+  const result = requireCapabilities(request.provider, request.required);
+  if (result.implemented === false)
+    throw new Error("Provider is not implemented");
+  return { ...result, negotiated: true, arbitrary_code_loaded: false };
+}
 export class OperationError extends Error {
   constructor(code, stage) {
     super(code + " at " + stage);

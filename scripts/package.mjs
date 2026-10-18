@@ -62,6 +62,13 @@ const files = [
   "platform/postgresql.mjs",
   "platform/archive.mjs",
   "platform/plans.mjs",
+  "platform/plan-scheduler.mjs",
+  "platform/os-schedule.mjs",
+  "platform/recovery-policy.mjs",
+  "platform/attestation.mjs",
+  "platform/distribution.mjs",
+  "platform/rescue-kit.mjs",
+  "platform/support.mjs",
   "ui/index.html",
   "ui/style.css",
   "ui/app.js",
@@ -86,6 +93,7 @@ const files = [
   "docs/APPLICATIONS.md",
   "docs/REMOTE.md",
   "docs/RELIABILITY_0_5.md",
+  "docs/RELIABILITY_0_6.md",
 ];
 if (process.platform !== "win32") files.push("_build/host/rename_noreplace");
 if (embedded)
@@ -147,6 +155,43 @@ fs.writeFileSync(path.join(destination, "package.json"), metadata, {
   flag: "wx",
 });
 hashes["package.json"] = hash(metadata);
+const inventory = JSON.stringify(
+  {
+    format: 1,
+    kind: "moonrestore_component_inventory",
+    version: sourceVersion,
+    components: [
+      {
+        name: "MoonRestore",
+        version: sourceVersion,
+        license: "Apache-2.0",
+        repository: "https://github.com/bzhangui/moonrestore",
+      },
+      {
+        name: "moonbitlang/x",
+        version: "0.5.5",
+        license_file: "licenses/MoonBit-Apache-2.0.txt",
+      },
+      ...(runtime
+        ? [
+            {
+              name: "Node.js",
+              version: runtime.version,
+              license_file: "runtime/NODE_LICENSE.txt",
+            },
+          ]
+        : []),
+    ],
+    npm_runtime_dependencies: [],
+    complete_external_system_inventory: false,
+  },
+  null,
+  2,
+);
+fs.writeFileSync(path.join(destination, "components.json"), inventory, {
+  flag: "wx",
+});
+hashes["components.json"] = hash(inventory);
 const version = spawnSync(moon, ["version", "--all"], {
   cwd: project,
   env: moonEnv,

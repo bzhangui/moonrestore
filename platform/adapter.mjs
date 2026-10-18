@@ -175,6 +175,7 @@ export class Host {
     this.vault = null;
     this.key = null;
     this.environment = environment;
+    this.parentPid = process.ppid;
     this.allowMaintenance = allowMaintenance;
     this.profile = 1;
     this.attributes = [];
@@ -196,6 +197,25 @@ export class Host {
         readBounded(this.environment.MOONRESTORE_CONTROL, 128),
       );
       if (control.cancel) throw new Error("Operation cancelled");
+    }
+    if (this.environment.MOONRESTORE_PARENT_CONTROL) {
+      const file = this.environment.MOONRESTORE_PARENT_CONTROL;
+      if (!/^parent-control-[a-f0-9-]{36}\.json$/.test(path.basename(file)))
+        throw new Error("Invalid parent-control path");
+      const control = JSON.parse(readBounded(file, 256));
+      if (
+        typeof control.cancel !== "boolean" ||
+        !Number.isSafeInteger(control.parent_pid) ||
+        control.parent_pid <= 0
+      )
+        throw new Error("Invalid parent-control identity");
+      if (control.cancel) throw new Error("Operation cancelled by parent");
+      try {
+        process.kill(this.parentPid, 0);
+        process.kill(control.parent_pid, 0);
+      } catch {
+        throw new Error("Recovery parent no longer available");
+      }
     }
     if (this.environment.MOONRESTORE_PROGRESS === "1")
       process.stderr.write(

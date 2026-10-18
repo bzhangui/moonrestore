@@ -124,7 +124,9 @@ try {
   if (actual !== expected) throw new Error("Large restored file differs");
   const report = {
     format: 1,
-    version: "0.5.0",
+    version: JSON.parse(
+      fs.readFileSync(new URL("../package.json", import.meta.url)),
+    ).version,
     kind: "large_file_regression",
     ok: true,
     bytes: String(size),

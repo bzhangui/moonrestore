@@ -1,6 +1,6 @@
-# MoonRestore 0.4.x 运行包
+# MoonRestore 运行包
 
-具体版本以 manifest.json 为准。本轮 0.4.0 只更新源码，不发布 Mooncakes；本地运行包也不等于公开 Release。
+具体版本以 manifest.json 为准。当前 0.6.0 为源码/本地包开发版，Mooncakes 正式版本仍为 0.5.0；本地运行包不等于公开 Release。
 
 普通便携包需外部 Node.js ≥22.16.0。若包含 `MoonRestore.exe` 和 `runtime/node.exe`，则为内置运行时的 Windows x64 桌面包，可双击 EXE，无需全局 Node/MoonBit，仍需 Windows .NET Framework 4.x。安装与回退见 `docs/DESKTOP.md`。两种包均无需运行 npm install，EXE 尚未代码签名。
 
@@ -21,3 +21,5 @@ node examples/scenarios.mjs
 也可运行 `node bin/moonrestore.mjs workbench` 启动仅本机的工作台；新任务、报告与密钥封装写入包内 `.local/state/`，不要将已使用的包目录重新公开分发。打包清单不包含这些运行数据。
 
 这些哈希用于损坏检测，不是签名认证。来源和快照 ID 都应从可信渠道取得。默认仓库仍是明文，需显式初始化加密仓库；同盘备份不是硬盘故障保护。新能力与安全边界见 `docs/WORKBENCH.md`、`docs/RECOVERY.md`。
+
+0.6 调度、固定恢复点、签名核验与独立救援的精确用法见 `docs/RELIABILITY_0_6.md`。救援包不包含密钥或原始资料。分段 live 清单、真实 VSS、PITR 和发布者代码签名仍未实现。

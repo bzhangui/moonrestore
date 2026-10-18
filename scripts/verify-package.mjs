@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { createHash } from "node:crypto";
+import { verifyArtifact } from "../platform/attestation.mjs";
 const directory = process.argv[2];
 if (!directory) throw new Error("Pass the bundle directory");
 const root = path.resolve(directory);
@@ -46,10 +47,26 @@ for (const [rel, expected] of Object.entries(manifest.files)) {
     .digest("hex");
   if (actual !== expected) throw new Error("Package checksum mismatch: " + rel);
 }
+let signed = false;
+if (process.argv.length > 3) {
+  if (
+    process.argv.length !== 7 ||
+    process.argv[3] !== "--signature" ||
+    process.argv[5] !== "--public-key"
+  )
+    throw new Error(
+      "Usage: verify-package BUNDLE [--signature FILE --public-key TRUSTED_PUBLIC_PEM]",
+    );
+  signed = verifyArtifact(
+    manifestPath,
+    process.argv[4],
+    process.argv[6],
+  ).signature_verified;
+}
 console.log(
   JSON.stringify({
     package_verified: true,
     files: Object.keys(manifest.files).length,
-    signed: false,
+    signed,
   }),
 );

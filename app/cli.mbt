@@ -1,7 +1,7 @@
 ///|
 fn help() -> String {
   let text =
-    #|MoonRestore 0.5 — verifiable incremental backups
+    #|MoonRestore 0.6 — verifiable incremental backups
     #|Usage: node bin/moonrestore.mjs <command> ...
     #|  init <repository>                       Create a NEW repository
     #|  backup <repository> <source>             Backup a directory tree
@@ -10,6 +10,18 @@ fn help() -> String {
     #|  operation-status <repo> <UUID> | operation-resume <repo> <UUID> [--recover]
     #|  plan-save <private-config.json> | plan-list | plan-status <UUID>
     #|  plan-run <UUID> [--recover --restart --accept-anomaly]  Explicit flags only
+    #|  plan-schedule <UUID> <PRIVATE-JSON> --confirm <UUID> | plan-schedules | plan-run-due
+    #|  plan-scheduler-recover --confirm recover-stopped-plan-scheduler  No active takeover
+    #|  plan-schedule-preview <UUID> | plan-schedule-install <UUID> --confirm EXACT_TASK
+    #|  protection-preview <repo> <PRIVATE-JSON> | protection-apply <repo> <PRIVATE-JSON> --confirm HASH
+    #|  protection-status <repo>                Persistent pins and retention window
+    #|  signing-key-create <NEW-private-dir>    Password-encrypted Ed25519 key
+    #|  artifact-sign <FILE> <PRIVATE-PEM> <NEW-signature> --subject snapshot|archive|package
+    #|  artifact-verify <FILE> <signature> <TRUSTED-PUBLIC-PEM> [--anchor FILE --trust HASH]
+    #|  rescue-kit <repo> <id> <NEW-kit> --bundle BUNDLE --bundle-sha256 HASH
+    #|  rescue-check <kit> <TRUSTED-recipe-hash> <repo>
+    #|  rescue-restore <kit> <TRUSTED-recipe-hash> <repo> <NEW-target>
+    #|  support-report [--output NEW-private-file]  Allowlisted counts/capabilities only
     #|  postgres-backup <repo> --database DB --user USER --pg-dump ABS --pg-restore ABS
     #|  archive-export <repo> <NEW-archive> [--no-compress]
     #|  archive-import <archive> <external-checksum> <NEW-repo>
@@ -89,7 +101,7 @@ pub fn run(args : Array[String]) -> Unit raise {
     return
   }
   if args[0] == "version" {
-    println("MoonRestore 0.5.0")
+    println("MoonRestore 0.6.0")
     return
   }
   if args[0] == "operation-transition" {
@@ -110,6 +122,36 @@ pub fn run(args : Array[String]) -> Unit raise {
     let forward : Int64 = @json.from_json(Json(args[3]))
     println(
       ({ "ok": @core.clock_guard(previous, current, forward) } : Json).stringify(),
+    )
+    return
+  }
+  if args[0] == "schedule-due" {
+    guard args.length() == 9 &&
+      (args[1] == "true" || args[1] == "false") &&
+      (args[2] == "true" || args[2] == "false") else {
+      raise @core.Invalid("expected strict scheduler fields")
+    }
+    let attempts = parse_size(args[3])
+    let limit = parse_size(args[4])
+    let previous : Int64 = @json.from_json(Json(args[5]))
+    let now : Int64 = @json.from_json(Json(args[6]))
+    let due : Int64 = @json.from_json(Json(args[7]))
+    let forward : Int64 = @json.from_json(Json(args[8]))
+    println(
+      (
+        {
+          "ok": true,
+          "due": @core.schedule_due(
+            args[1] == "true",
+            args[2] == "true",
+            attempts,
+            limit,
+            previous,
+            now,
+            due,
+            forward,
+          ),
+        } : Json).stringify(),
     )
     return
   }

@@ -1,8 +1,54 @@
 // A process-local task context; progress contains counts, never file names or keys.
 import { AsyncLocalStorage } from "node:async_hooks";
 import { randomUUID } from "node:crypto";
+import fs from "node:fs";
+import path from "node:path";
+import { checked, readPrivate, stateHome } from "./vault.mjs";
 const storage = new AsyncLocalStorage();
 export const activity = () => storage.getStore();
+export const withSignal = (signal, work) =>
+  storage.run({ ...activity(), signal }, work);
+// Used only by a verified offline runtime launched by rescue-kit. Polling a
+// private parent-control file lets Windows forward cooperative cancellation;
+// terminating the coordinator alone must not leave an unobserved writer.
+export async function withParentControl(work) {
+  const file = process.env.MOONRESTORE_PARENT_CONTROL;
+  if (!file) return work();
+  const parent = path.resolve(stateHome(), "control"),
+    exact = checked(file),
+    normalize = (p) => (process.platform === "win32" ? p.toLowerCase() : p);
+  if (
+    normalize(path.dirname(exact)) !== normalize(parent) ||
+    !/^parent-control-[a-f0-9-]{36}\.json$/.test(path.basename(exact))
+  )
+    throw new Error("Invalid rescue parent-control path");
+  const controller = new AbortController();
+  const check = () => {
+    try {
+      const r = JSON.parse(readPrivate(exact, 256));
+      if (
+        typeof r.cancel !== "boolean" ||
+        !Number.isSafeInteger(r.parent_pid) ||
+        r.parent_pid !== process.ppid ||
+        r.parent_pid <= 0
+      )
+        throw new Error("Invalid parent identity");
+      process.kill(r.parent_pid, 0);
+      if (r.cancel) controller.abort();
+    } catch {
+      controller.abort();
+    }
+  };
+  check();
+  if (controller.signal.aborted)
+    throw new Error("Rescue parent is cancelled or unavailable");
+  const timer = setInterval(check, 100);
+  try {
+    return await withSignal(controller.signal, work);
+  } finally {
+    clearInterval(timer);
+  }
+}
 export async function withBudget(minutes, work) {
   const parent = activity(),
     controller = new AbortController(),

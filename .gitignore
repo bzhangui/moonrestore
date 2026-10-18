@@ -8,3 +8,5 @@ coverage/
 *申报书*.md
 *.dpapi
 *recovery-key*.json
+*.pem
+*support-report*.json

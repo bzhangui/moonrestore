@@ -60,7 +60,9 @@ try {
     throw new Error("Scheduled backup did not finish successfully");
   const report = {
     format: 1,
-    version: "0.5.0",
+    version: JSON.parse(
+      fs.readFileSync(new URL("../package.json", import.meta.url)),
+    ).version,
     kind: "windows_scheduler_roundtrip",
     ok: true,
     current_user: true,

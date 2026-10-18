@@ -21,6 +21,12 @@ import { Journal } from "../platform/journal.mjs";
 import { postgresCommand } from "../platform/postgresql.mjs";
 import { archiveCommand } from "../platform/archive.mjs";
 import { planCommand } from "../platform/plans.mjs";
+import { schedulerCommand } from "../platform/plan-scheduler.mjs";
+import { attestationCommand } from "../platform/attestation.mjs";
+import { protectionCommand } from "../platform/recovery-policy.mjs";
+import { rescueKitCommand } from "../platform/rescue-kit.mjs";
+import { supportCommand } from "../platform/support.mjs";
+import { withParentControl } from "../platform/activity.mjs";
 if (process.env.MOONRESTORE_INTERNAL !== "1" && process.argv[2] === "--home") {
   if (!process.argv[3])
     throw new Error("--home requires a private state directory");
@@ -30,20 +36,27 @@ if (process.env.MOONRESTORE_INTERNAL !== "1" && process.argv[2] === "--home") {
 if (process.env.MOONRESTORE_INTERNAL !== "1") {
   try {
     const args = process.argv.slice(2);
-    const result =
-      (await operationCommand(args)) ??
-      (await postgresCommand(args)) ??
-      (await archiveCommand(args)) ??
-      (await planCommand(args)) ??
-      (await advanced(args)) ??
-      (await recoveryCommand(args)) ??
-      (await applicationCommand(args)) ??
-      (await indexCommand(args)) ??
-      (await remoteCommand(args)) ??
-      (await providerCommand(args)) ??
-      (await retentionCommand(args)) ??
-      (await jobCommand(args)) ??
-      (await workbenchCommand(args));
+    const result = await withParentControl(
+      async () =>
+        (await operationCommand(args)) ??
+        (await postgresCommand(args)) ??
+        (await archiveCommand(args)) ??
+        (await planCommand(args)) ??
+        (await schedulerCommand(args)) ??
+        attestationCommand(args) ??
+        (await protectionCommand(args)) ??
+        (await rescueKitCommand(args)) ??
+        supportCommand(args) ??
+        (await advanced(args)) ??
+        (await recoveryCommand(args)) ??
+        (await applicationCommand(args)) ??
+        (await indexCommand(args)) ??
+        (await remoteCommand(args)) ??
+        (await providerCommand(args)) ??
+        (await retentionCommand(args)) ??
+        (await jobCommand(args)) ??
+        (await workbenchCommand(args)),
+    );
     if (result !== null) {
       console.log(JSON.stringify(result));
       if (result.ok === false) process.exitCode = 1;

@@ -28,6 +28,12 @@ fn main {
     let text = snapshot.encode()
     let id = @backup.text_digest(text)
     ignore(@backup.decode_snapshot(text, id))
+    // New 0.6 source-only APIs: observed evidence is snapshot-bound and a
+    // discontinuous clock never grants an automatic retry or cleanup window.
+    assert_eq(@backup.evidence_state(id, id, 100L, 110L, 20L), 1)
+    assert_eq(@backup.evidence_state(id, "other", 100L, 110L, 20L), 3)
+    assert_true(@backup.schedule_due(true, false, 0, 3, 100L, 110L, 105L, 20L))
+    assert_false(@backup.schedule_due(true, false, 0, 3, 100L, 99L, 105L, 20L))
     println("snapshot=\{id}; chunks=\{pieces.length()}; verified=true")
   } catch {
     e => abort("example failed: \{e}")
