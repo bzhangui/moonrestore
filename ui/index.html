@@ -636,8 +636,28 @@
           <div id="durable-plans" class="durable-list" aria-live="polite">
             <p>还未读取计划。点击“刷新计划”，或在下方创建首个计划。</p>
           </div>
+          <div class="readiness-panel">
+            <div class="section-title">
+              <h3>恢复准备度</h3>
+              <button id="readiness-refresh" type="button" class="secondary">
+                检查恢复目标与任务缺席
+              </button>
+            </div>
+            <p class="muted">
+              分别查看有效恢复点、实测演练耗时和调度是否缺席。观察器不运行时无法本机即时报警；不把证据过期显示为健康。
+            </p>
+            <div id="readiness-list" aria-live="polite">
+              <p>尚未读取，不代表已通过。</p>
+            </div>
+            <button id="state-location" type="button" class="secondary">
+              检查私有配置位置
+            </button>
+            <p id="state-current" class="muted" role="status">
+              不会自动搬迁配置或密钥。
+            </p>
+          </div>
           <details>
-            <summary>创建文件或 SQLite 计划</summary>
+            <summary>创建文件、SQLite 或本机 PostgreSQL 计划</summary>
             <form id="durable-plan-form" class="form-grid">
               <label
                 >计划名称<input
@@ -650,6 +670,9 @@
                 >备份方式<select id="durable-type">
                   <option value="files">普通文件夹</option>
                   <option value="sqlite">SQLite 在线一致性导出</option>
+                  <option value="postgresql">
+                    本机 PostgreSQL 单库逻辑导出
+                  </option>
                 </select></label
               >
               <label
@@ -665,11 +688,318 @@
                   autocomplete="off"
               /></label>
               <p class="muted">
-                不会保存密码；保存计划不会自动运行，调度需单独确认。新计划启用清理保护；一次完整计划通过后才解除。PostgreSQL
-                和远端配置使用 CLI。
+                不会保存密码；保存不自动运行，调度需单独确认。新计划启用清理保护；完整计划通过后才解除。PostgreSQL凭据由服务端受控环境提供，不在表单填写。
               </p>
+              <div id="durable-postgres-fields" class="form-grid" hidden>
+                <label
+                  >数据库名<input
+                    id="durable-pg-database"
+                    autocomplete="off" /></label
+                ><label
+                  >用户名<input id="durable-pg-user" autocomplete="off"
+                /></label>
+                <label
+                  >pg_dump绝对路径<input
+                    id="durable-pg-dump"
+                    autocomplete="off" /></label
+                ><label
+                  >pg_restore绝对路径<input
+                    id="durable-pg-restore"
+                    autocomplete="off"
+                /></label>
+                <p class="muted">
+                  界面仅连接127.0.0.1:5432；不是集群/PITR，不自动恢复到生产数据库。
+                </p>
+              </div>
+              <label
+                >恢复点窗口（小时）<input
+                  id="durable-rpo"
+                  type="number"
+                  min="1"
+                  max="8760"
+                  value="24"
+                  required
+              /></label>
+              <label
+                >演练耗时目标（分钟，0不设置）<input
+                  id="durable-rto"
+                  type="number"
+                  min="0"
+                  max="1440"
+                  value="0"
+                  required
+              /></label>
+              <label
+                >第二仓库（可选）<input
+                  id="durable-replica"
+                  autocomplete="off"
+                /><small>路径不同不代表独立物理设备。</small></label
+              >
+              <label class="check"
+                ><input
+                  id="durable-remote"
+                  type="checkbox"
+                />为此计划配置加密S3副本</label
+              >
+              <div id="durable-remote-fields" class="form-grid" hidden>
+                <label
+                  >明确的HTTPS端点<input
+                    id="durable-remote-endpoint"
+                    type="url"
+                    autocomplete="off" /></label
+                ><label
+                  >桶名<input
+                    id="durable-remote-bucket"
+                    autocomplete="off" /></label
+                ><label
+                  >区域<input
+                    id="durable-remote-region"
+                    value="us-east-1"
+                    autocomplete="off"
+                /></label>
+                <p class="muted">
+                  仅加密仓库。凭据使用本机MOONRESTORE_S3_*环境变量，不写入页面、计划或浏览器存储。此向导不启用不可逆云保留。
+                </p>
+                <label class="check"
+                  ><input
+                    id="durable-remote-consent"
+                    type="checkbox"
+                  />同意计划运行时连接所填端点，已核对账号权限与费用</label
+                >
+              </div>
               <button type="submit">保存计划</button>
             </form>
+          </details>
+          <details>
+            <summary>创建可独立使用的救援包</summary>
+            <form id="rescue-kit-form" class="form-grid">
+              <label
+                >已有仓库<input
+                  id="rescue-kit-repository"
+                  required
+                  autocomplete="off" /></label
+              ><label
+                >完整快照ID<input
+                  id="rescue-kit-snapshot"
+                  pattern="[a-f0-9]{64}"
+                  required
+                  autocomplete="off"
+              /></label>
+              <label
+                >已验证运行包目录<input
+                  id="rescue-kit-bundle"
+                  required
+                  autocomplete="off" /></label
+              ><label
+                >独立可信manifest.json的SHA-256<input
+                  id="rescue-kit-sha"
+                  pattern="[a-f0-9]{64}"
+                  required
+                  autocomplete="off"
+              /></label>
+              <label
+                >全新救援包目录<input
+                  id="rescue-kit-destination"
+                  required
+                  autocomplete="off" /></label
+              ><label class="check"
+                ><input
+                  id="rescue-kit-accept"
+                  type="checkbox"
+                  required
+                />摘要已从独立可信来源核对，只创建新目录；恢复密钥另存</label
+              >
+              <button type="submit">校验并创建救援包</button>
+            </form>
+            <p class="muted">
+              不包含资料仓库、密码或旧状态；创建成功不代表已完成跨主机恢复。
+            </p>
+          </details>
+          <details>
+            <summary>用救援包检查并恢复到新目录</summary>
+            <form id="kit-recover-form" class="form-grid">
+              <label
+                >救援包目录<input
+                  id="kit-recover-kit"
+                  required
+                  autocomplete="off" /></label
+              ><label
+                >独立保存的配方SHA-256<input
+                  id="kit-recover-sha"
+                  required
+                  pattern="[a-f0-9]{64}"
+                  autocomplete="off"
+              /></label>
+              <label
+                >资料仓库目录<input
+                  id="kit-recover-repository"
+                  required
+                  autocomplete="off" /></label
+              ><label
+                >全新恢复目录<input
+                  id="kit-recover-destination"
+                  autocomplete="off"
+              /></label>
+              <label class="check"
+                ><input
+                  id="kit-recover-consent"
+                  type="checkbox"
+                />确认独立可信配方，只向新目录恢复；密钥已另行配置</label
+              >
+              <button id="kit-recover-check" type="button" class="secondary">
+                只检查救援配方和运行包</button
+              ><button type="submit">使用救援包恢复并读回</button>
+            </form>
+            <p class="muted">
+              只检查配方不代表资料内容已验证。成功恢复也不自动等于跨主机验证。
+            </p>
+          </details>
+          <details>
+            <summary>验证 SQLite 恢复内容</summary>
+            <form id="sqlite-recover-form" class="form-grid">
+              <label
+                >仓库目录<input
+                  id="sqlite-recover-repo"
+                  required
+                  autocomplete="off" /></label
+              ><label
+                >完整快照ID<input
+                  id="sqlite-recover-id"
+                  required
+                  pattern="[a-f0-9]{64}"
+                  autocomplete="off"
+              /></label>
+              <label
+                >全新恢复目录<input
+                  id="sqlite-recover-target"
+                  required
+                  autocomplete="off"
+              /></label>
+              <label
+                >检查配置（JSON，不接受SQL脚本）<textarea
+                  id="sqlite-recover-checks"
+                  rows="4"
+                  maxlength="65536"
+                >
+{"format":1,"tables":[]}</textarea
+                >
+              </label>
+              <label class="check"
+                ><input
+                  id="sqlite-recover-accept"
+                  type="checkbox"
+                  required
+                />只恢复到新目录；检查失败时保留副本供私下排查，不自动替换生产库</label
+              ><button type="submit">恢复并重新打开数据库验证</button>
+            </form>
+            <p class="muted">
+              校验完整性、外键与可选表/列/行数范围；不等于应用业务逻辑验收。
+            </p>
+          </details>
+          <details>
+            <summary>只读审计远端固定版本和保留信息</summary>
+            <form id="remote-audit-form" class="form-grid">
+              <label
+                >端点URL<input
+                  id="remote-audit-endpoint"
+                  required
+                  type="url"
+                  autocomplete="off" /></label
+              ><label
+                >桶名<input
+                  id="remote-audit-bucket"
+                  required
+                  autocomplete="off"
+              /></label>
+              <label
+                >回执对象key<input
+                  id="remote-audit-key"
+                  required
+                  autocomplete="off" /></label
+              ><label
+                >回执SHA-256<input
+                  id="remote-audit-sha"
+                  required
+                  pattern="[a-f0-9]{64}"
+                  autocomplete="off" /></label
+              ><label
+                >固定回执versionId<input
+                  id="remote-audit-version"
+                  required
+                  autocomplete="off"
+              /></label>
+              <label
+                >起始成员<input
+                  id="remote-audit-offset"
+                  required
+                  type="number"
+                  min="0"
+                  max="100003"
+                  value="0" /></label
+              ><label
+                >本批成员数<input
+                  id="remote-audit-batch"
+                  required
+                  type="number"
+                  min="1"
+                  max="1000"
+                  value="100" /></label
+              ><label
+                >要求剩余保留天数（0不检查）<input
+                  id="remote-audit-days"
+                  required
+                  type="number"
+                  min="0"
+                  max="3650"
+                  value="0"
+              /></label>
+              <label class="check"
+                ><input
+                  id="remote-audit-consent"
+                  type="checkbox"
+                  required
+                />同意向此端点发起只读请求，已核对权限及流量费用；凭据仅在服务端环境设置</label
+              ><button type="submit">审计本批固定对象版本</button>
+            </form>
+            <p class="muted">
+              分批结果不合并冒充全量通过。密文摘要/保留读回不是明文恢复、删除权限测试或真实云认证。
+            </p>
+          </details>
+          <details>
+            <summary>私有配置迁移（保留原目录）</summary>
+            <form id="state-migrate-form" class="form-grid">
+              <label
+                >旧私有状态目录<input
+                  id="state-migrate-source"
+                  required
+                  autocomplete="off" /></label
+              ><label
+                >全新状态目录<input
+                  id="state-migrate-target"
+                  required
+                  autocomplete="off"
+              /></label>
+              <label class="check"
+                ><input
+                  id="state-migrate-accept"
+                  type="checkbox"
+                  required
+                />已关闭使用旧状态的工作台与runner；不迁移密钥、未完成任务或报告，不切换当前进程</label
+              >
+              <button
+                id="state-migrate-preview"
+                type="button"
+                class="secondary"
+              >
+                预览可迁移配置</button
+              ><button id="state-migrate-apply" type="submit" disabled>
+                确认此预览并复制配置
+              </button>
+            </form>
+            <p id="state-migrate-result" class="muted" role="status">
+              必须先预览；修改路径后需重新预览。原状态保留，可继续用旧 --home
+              回退。
+            </p>
           </details>
           <details>
             <summary>中断任务续作</summary>
@@ -737,6 +1067,7 @@
         <script type="module" src="/enhancements.js"></script>
         <script type="module" src="/recovery.js"></script>
         <script type="module" src="/durable.js"></script>
+        <script type="module" src="/readiness.js"></script>
       </main>
     </div>
   </body>

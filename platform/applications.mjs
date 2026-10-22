@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url";
 import { core, openHost, drill, options, removeOwned } from "./maintenance.mjs";
 import { checked, mkdirPrivate, stateHome } from "./vault.mjs";
 import { activity, checkpoint, credentials } from "./activity.mjs";
+import { verifySqliteRecovery } from "./sqlite-recovery.mjs";
 
 export async function sqliteBackup(
   repository,
@@ -109,11 +110,18 @@ export async function sqliteBackup(
       env: { MOONRESTORE_READ_ONLY: "1" },
     });
     const restored = await drill(repository, backed.snapshot);
+    const restoredDirectory = path.join(owned, "verified-restore");
+    await core(["restore", repository, backed.snapshot, restoredDirectory]);
+    const reopened = await verifySqliteRecovery(
+      path.join(restoredDirectory, "database.sqlite"),
+    );
     return {
-      ok: audit.ok && restored.ok,
+      ok: audit.ok && restored.ok && reopened.ok,
       kind: "sqlite_consistent_backup",
       snapshot: backed.snapshot,
       sqlite_integrity_checked: true,
+      restored_database_opened: true,
+      restored_foreign_keys_checked: reopened.foreign_keys_checked,
       file_hash: exported.hash,
       export_bytes: exported.bytes,
       recovery_drill: restored.ok,

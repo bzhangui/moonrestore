@@ -40,6 +40,20 @@ import {
 } from "./recovery.mjs";
 import { randomUUID } from "node:crypto";
 import { savePlan, listPlans, runPlan } from "./plans.mjs";
+import { recoveryReadiness } from "./readiness.mjs";
+import {
+  stateLocation,
+  stateMigrationPreview,
+  migrateState,
+} from "./state-migration.mjs";
+import {
+  createRescueKit,
+  checkRescueKit,
+  restoreWithRescueKit,
+} from "./rescue-kit.mjs";
+import { schedulerCommand } from "./plan-scheduler.mjs";
+import { remoteAuditCommand } from "./remote-audit.mjs";
+import { recoverSqlite } from "./sqlite-recovery.mjs";
 import {
   configureSchedule,
   scheduledPlans,
@@ -157,6 +171,116 @@ export async function startWorkbench({
       case "plans":
         object(p, []);
         return listPlans();
+      case "readiness":
+        object(p, []);
+        return recoveryReadiness();
+      case "remote-audit": {
+        object(p, [
+          "receiptKey",
+          "checksum",
+          "endpoint",
+          "bucket",
+          "region",
+          "version",
+          "offset",
+          "batch",
+          "retentionDays",
+          "allowRemote",
+        ]);
+        if (p.allowRemote !== true)
+          throw new Error("Explicit remote audit network consent required");
+        const args = [
+          "remote-audit",
+          p.receiptKey,
+          p.checksum,
+          "--endpoint",
+          p.endpoint,
+          "--bucket",
+          p.bucket,
+          "--version",
+          p.version,
+          "--allow-remote",
+        ];
+        for (const [field, flag] of [
+          ["region", "region"],
+          ["offset", "offset"],
+          ["batch", "batch"],
+          ["retentionDays", "remaining-days"],
+        ])
+          if (p[field] !== undefined) args.push("--" + flag, String(p[field]));
+        if (args.some((a) => typeof a !== "string"))
+          throw new Error("Invalid remote audit fields");
+        return remoteAuditCommand(args);
+      }
+      case "sqlite-recover":
+        object(p, [
+          "repository",
+          "snapshot",
+          "destination",
+          "confirmation",
+          "checks",
+        ]);
+        return recoverSqlite(p.repository, p.snapshot, p.destination, {
+          confirmation: p.confirmation,
+          checks: p.checks,
+        });
+      case "state-status":
+        object(p, []);
+        return stateLocation();
+      case "state-migrate-preview":
+        object(p, ["source", "destination"]);
+        return stateMigrationPreview(p.source, p.destination);
+      case "state-migrate":
+        object(p, ["source", "destination", "confirmation"]);
+        return migrateState(p.source, p.destination, p.confirmation);
+      case "rescue-kit-create":
+        object(p, [
+          "repository",
+          "snapshot",
+          "bundle",
+          "manifestSha256",
+          "destination",
+          "confirmation",
+        ]);
+        if (p.confirmation !== p.destination)
+          throw new Error("Confirm the exact new rescue directory");
+        return createRescueKit(
+          p.repository,
+          p.snapshot,
+          p.bundle,
+          p.manifestSha256,
+          p.destination,
+        );
+      case "rescue-kit-check":
+        object(p, ["kit", "recipeSha256", "repository"]);
+        return checkRescueKit(p.kit, p.recipeSha256, p.repository);
+      case "rescue-kit-restore":
+        object(p, [
+          "kit",
+          "recipeSha256",
+          "repository",
+          "destination",
+          "confirmation",
+        ]);
+        if (p.confirmation !== p.destination)
+          throw new Error("Confirm the exact new rescue target");
+        return restoreWithRescueKit(
+          p.kit,
+          p.recipeSha256,
+          p.repository,
+          p.destination,
+        );
+      case "plan-os-preview":
+        object(p, ["id"]);
+        return schedulerCommand(["plan-schedule-preview", p.id]);
+      case "plan-os-install":
+        object(p, ["id", "confirmation"]);
+        return schedulerCommand([
+          "plan-schedule-install",
+          p.id,
+          "--confirm",
+          p.confirmation,
+        ]);
       case "plan-save":
         return savePlan(p);
       case "plan-schedules":
@@ -439,6 +563,17 @@ export async function startWorkbench({
     }
   };
   const routes = [
+    "readiness",
+    "state-status",
+    "state-migrate-preview",
+    "state-migrate",
+    "remote-audit",
+    "sqlite-recover",
+    "rescue-kit-create",
+    "rescue-kit-check",
+    "rescue-kit-restore",
+    "plan-os-preview",
+    "plan-os-install",
     "plans",
     "plan-save",
     "plan-run",
@@ -518,6 +653,7 @@ export async function startWorkbench({
         "/enhancements.js",
         "/recovery.js",
         "/durable.js",
+        "/readiness.js",
         "/style.css",
       ].includes(url.pathname)
     ) {
@@ -529,6 +665,7 @@ export async function startWorkbench({
           "/enhancements.js": "enhancements.js",
           "/recovery.js": "recovery.js",
           "/durable.js": "durable.js",
+          "/readiness.js": "readiness.js",
           "/style.css": "style.css",
         }[url.pathname],
       );

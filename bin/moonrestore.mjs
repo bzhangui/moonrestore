@@ -27,6 +27,10 @@ import { protectionCommand } from "../platform/recovery-policy.mjs";
 import { rescueKitCommand } from "../platform/rescue-kit.mjs";
 import { supportCommand } from "../platform/support.mjs";
 import { withParentControl } from "../platform/activity.mjs";
+import { readinessCommand } from "../platform/readiness.mjs";
+import { stateCommand } from "../platform/state-migration.mjs";
+import { remoteAuditCommand } from "../platform/remote-audit.mjs";
+import { sqliteRecoveryCommand } from "../platform/sqlite-recovery.mjs";
 if (process.env.MOONRESTORE_INTERNAL !== "1" && process.argv[2] === "--home") {
   if (!process.argv[3])
     throw new Error("--home requires a private state directory");
@@ -39,6 +43,10 @@ if (process.env.MOONRESTORE_INTERNAL !== "1") {
     const result = await withParentControl(
       async () =>
         (await operationCommand(args)) ??
+        (await readinessCommand(args)) ??
+        (await sqliteRecoveryCommand(args)) ??
+        stateCommand(args) ??
+        (await remoteAuditCommand(args)) ??
         (await postgresCommand(args)) ??
         (await archiveCommand(args)) ??
         (await planCommand(args)) ??

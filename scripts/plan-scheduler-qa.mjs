@@ -26,6 +26,8 @@ const parent = fs.realpathSync(os.tmpdir()),
 process.env.MOONRESTORE_HOME = home;
 let preview,
   registered = false,
+  attempted = false,
+  cleanupConfirmed = false,
   result;
 function powershell(script, input) {
   const r = spawnSync(
@@ -67,6 +69,7 @@ try {
     p.id,
   );
   preview = await schedulerCommand(["plan-schedule-preview", p.id]);
+  attempted = true;
   await schedulerCommand([
     "plan-schedule-install",
     p.id,
@@ -75,7 +78,7 @@ try {
   ]);
   registered = true;
   powershell(
-    "$ErrorActionPreference='Stop';$v=[Console]::In.ReadToEnd()|ConvertFrom-Json;Start-ScheduledTask -TaskName $v.task;$end=[DateTime]::UtcNow.AddSeconds(80);do{Start-Sleep -Milliseconds 250;if(Test-Path -LiteralPath $v.schedule){$s=Get-Content -LiteralPath $v.schedule -Raw -Encoding UTF8|ConvertFrom-Json;if($s.clock -gt $v.before -and $s.state -ne 'running'){break}}}while([DateTime]::UtcNow -lt $end)",
+    "$ErrorActionPreference='Stop';$v=[Console]::In.ReadToEnd()|ConvertFrom-Json;$service=New-Object -ComObject 'Schedule.Service';$service.Connect();$service.GetFolder('\\').GetTask($v.task).Run($null)|Out-Null;$end=[DateTime]::UtcNow.AddSeconds(80);do{Start-Sleep -Milliseconds 250;if(Test-Path -LiteralPath $v.schedule){$s=Get-Content -LiteralPath $v.schedule -Raw -Encoding UTF8|ConvertFrom-Json;if($s.clock -gt $v.before -and $s.state -ne 'running'){break}}}while([DateTime]::UtcNow -lt $end)",
     {
       task: preview.task,
       schedule: path.join(home, "plan-schedules-v1", p.id + ".json"),
@@ -101,13 +104,31 @@ try {
   };
 } finally {
   try {
-    if (registered)
+    if (attempted)
       powershell(
-        "$ErrorActionPreference='Stop';$v=[Console]::In.ReadToEnd()|ConvertFrom-Json;$t=Get-ScheduledTask -TaskName $v.task -ErrorAction SilentlyContinue;if($t){if($t.Description -ne 'MoonRestore explicit current-user plan' -or $t.Actions[0].Execute -ne $v.node -or -not $t.Actions[0].Arguments.Contains($v.home)){throw 'Not the owned task'};Stop-ScheduledTask -TaskName $v.task -ErrorAction SilentlyContinue;Unregister-ScheduledTask -TaskName $v.task -Confirm:$false}",
+        "$ErrorActionPreference='Stop';$v=[Console]::In.ReadToEnd()|ConvertFrom-Json;$s=New-Object -ComObject 'Schedule.Service';$s.Connect();$f=$s.GetFolder('\\');try{$t=$f.GetTask($v.task)}catch{if($_.Exception.HResult -eq -2147024894){exit 0}else{throw}};$a=$t.Definition.Actions.Item(1);if($t.Definition.RegistrationInfo.Description -ne 'MoonRestore explicit current-user plan' -or $t.Definition.Actions.Count -ne 1 -or $a.Path -ne $v.node -or -not $a.Arguments.Contains($v.home)){throw 'Not the owned task'};$t.Stop(0);$f.DeleteTask($v.task,0)",
         { task: preview.task, node: process.execPath, home },
       );
+    cleanupConfirmed = true;
     removeOwned(root, parent, "moonrestore-plan-qa-");
   } finally {
+    if (attempted && !cleanupConfirmed)
+      console.error(
+        JSON.stringify({
+          ok: false,
+          kind: "os_rehearsal_cleanup_unconfirmed",
+          exact_task: preview.task,
+          private_fixture_retained: fs.existsSync(root),
+          registration_was_confirmed: registered,
+          files: saveReport({
+            ok: false,
+            kind: "os_rehearsal_cleanup_unconfirmed",
+            exact_task: preview.task,
+            private_fixture: root,
+            registration_was_confirmed: registered,
+          }),
+        }),
+      );
     if (previous === undefined) delete process.env.MOONRESTORE_HOME;
     else process.env.MOONRESTORE_HOME = previous;
   }

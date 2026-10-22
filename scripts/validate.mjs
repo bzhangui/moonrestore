@@ -27,6 +27,7 @@ for (const target of ["js", "wasm", "wasm-gc", "native"]) {
 run(process.execPath, ["scripts/build.mjs"]);
 run(process.execPath, [
   "--test",
+  "--test-concurrency=4",
   ...(await import("node:fs"))
     .readdirSync(new URL("../tests/", import.meta.url))
     .filter((name) => name.endsWith(".test.mjs"))
@@ -45,6 +46,7 @@ run(moon, [
   "summary",
 ]);
 run(process.execPath, ["scripts/check-package.mjs"]);
+run(process.execPath, ["scripts/audit-public.mjs"]);
 console.log(
   "All local maintenance checks passed. Remote CI/publication/real hardware durability are separate evidence.",
 );

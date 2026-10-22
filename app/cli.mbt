@@ -1,7 +1,7 @@
 ///|
 fn help() -> String {
   let text =
-    #|MoonRestore 0.6 — verifiable incremental backups
+    #|MoonRestore 0.7 — verifiable incremental backups
     #|Usage: node bin/moonrestore.mjs <command> ...
     #|  init <repository>                       Create a NEW repository
     #|  backup <repository> <source>             Backup a directory tree
@@ -13,6 +13,10 @@ fn help() -> String {
     #|  plan-schedule <UUID> <PRIVATE-JSON> --confirm <UUID> | plan-schedules | plan-run-due
     #|  plan-scheduler-recover --confirm recover-stopped-plan-scheduler  No active takeover
     #|  plan-schedule-preview <UUID> | plan-schedule-install <UUID> --confirm EXACT_TASK
+    #|  readiness | watchdog-check [--notify]  Local observations only, no implicit network
+    #|  readiness-send HTTPS_ENDPOINT [--allow-remote]  Redacted counts, not paths
+    #|  state-status | state-migrate-preview OLD_STATE NEW_STATE
+    #|  state-migrate OLD_STATE NEW_STATE --confirm PREVIEW_HASH  No keys or overwrite
     #|  protection-preview <repo> <PRIVATE-JSON> | protection-apply <repo> <PRIVATE-JSON> --confirm HASH
     #|  protection-status <repo>                Persistent pins and retention window
     #|  signing-key-create <NEW-private-dir>    Password-encrypted Ed25519 key
@@ -50,9 +54,12 @@ fn help() -> String {
     #|  health-status <repo> [--max-age-hours N]
     #|  index-build <repo> | index-search <repo> <query> [--offset N]
     #|  sqlite-backup <repo> <database> [--label text --timeout ms]
+    #|  sqlite-recover <repo> <id> <NEW-dir> --confirm <NEW-dir> [--checks PRIVATE_JSON]
     #|  vss-plan <source> | provider-rehearsal <repo>  No native VSS
     #|  s3-push <repo> <id> --endpoint URL --bucket NAME [--allow-remote]
     #|  s3-restore <receipt-key> <checksum> <NEW-repo> --endpoint URL --bucket NAME
+    #|  remote-audit RECEIPT_KEY SHA --endpoint URL --bucket NAME --version PIN [--offset N --batch N --remaining-days N --allow-remote]
+    #|  remote-writer-policy BUCKET PREFIX     Reviewable IAM template only, not applied
     #|    See docs/REMOTE.md for credentials, versions and explicit retention consent
     #|  retention-plan <repository> <keep-last>  Preview only; --daily/weekly/monthly N
     #|  report <repository> [id|all]            Private JSON/HTML report; --details opt-in
@@ -101,7 +108,7 @@ pub fn run(args : Array[String]) -> Unit raise {
     return
   }
   if args[0] == "version" {
-    println("MoonRestore 0.6.0")
+    println("MoonRestore 0.7.0")
     return
   }
   if args[0] == "operation-transition" {
@@ -111,6 +118,40 @@ pub fn run(args : Array[String]) -> Unit raise {
     println(
       ({ "ok": @core.operation_transition(args[1], args[2]) } : Json).stringify(),
     )
+    return
+  }
+  if args[0] == "recovery-goals" {
+    guard args.length() == 2 && @utf8.encode(args[1]).length() <= 24000 else {
+      raise @core.Invalid("bounded recovery goals expected")
+    }
+    let inputs : Array[GoalInput] = @json.from_json(@json.parse(args[1]))
+    guard inputs.length() <= 32 else {
+      raise @core.Invalid("recovery goal batch budget")
+    }
+    let output : Array[Json] = []
+    for item in inputs {
+      output.push({
+        "goal": @core.recovery_goal(
+          item.age_ms,
+          item.rpo_ms,
+          item.observed_ms,
+          item.rto_ms,
+          item.evidence_current,
+        ).to_json(),
+        "schedule": Json(
+          @core.schedule_health(
+            item.enabled,
+            item.blocked,
+            item.running,
+            item.previous,
+            item.now,
+            item.due,
+            item.grace_ms,
+          ),
+        ),
+      })
+    }
+    println(({ "ok": true, "results": Json(output) } : Json).stringify())
     return
   }
   if args[0] == "clock-guard" {

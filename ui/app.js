@@ -66,6 +66,14 @@ async function api(route, body) {
       "plan-run",
       "operation-resume",
       "restore-resumable",
+      "readiness",
+      "rescue-kit-create",
+      "rescue-kit-check",
+      "rescue-kit-restore",
+      "state-migrate",
+      "remote-audit",
+      "sqlite-recover",
+      "plan-os-install",
     ].includes(route)
   ) {
     const minutes =

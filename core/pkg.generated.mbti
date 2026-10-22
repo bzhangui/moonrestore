@@ -32,11 +32,15 @@ pub fn operation_transition(String, String) -> Bool
 
 pub fn path_order(String, String) -> Int
 
+pub fn recovery_goal(Int64, Int64, Int64, Int64, Bool) -> RecoveryGoal raise
+
 pub fn rescue_entries(Snapshot, Array[String], Array[String]) -> Array[Entry] raise BackupError
 
 pub fn retention_keep(Array[RetentionRecord], Int, Int, Int, Int, Array[String]) -> Array[String] raise BackupError
 
 pub fn schedule_due(Bool, Bool, Int, Int, Int64, Int64, Int64, Int64) -> Bool raise
+
+pub fn schedule_health(Bool, Bool, Bool, Int64, Int64, Int64, Int64) -> String raise
 
 pub fn select_entries(Snapshot, Array[String]) -> Array[Entry] raise BackupError
 
@@ -151,6 +155,14 @@ pub fn Limits::to_json(Self) -> Json
 pub fn Limits::to_repr(Self) -> @debug.Repr
 pub fn Limits::validate(Self) -> Unit raise BackupError
 pub fn Limits::validate_for_format(Self, Int) -> Unit raise BackupError
+
+pub(all) struct RecoveryGoal {
+  evidence_current : Bool
+  rpo_state : String
+  rto_state : String
+  ready : Bool
+} derive(ToJson)
+pub fn RecoveryGoal::to_json(Self) -> Json
 
 pub(all) struct RetentionRecord {
   id : String

@@ -72,6 +72,39 @@ export function signS3Request({
     authorization: `AWS4-HMAC-SHA256 Credential=${accessKeyId}/${scope},SignedHeaders=${names},Signature=${signature}`,
   };
 }
+export function validateS3Destination({
+  endpoint,
+  bucket,
+  region = "us-east-1",
+  allowRemote = false,
+} = {}) {
+  const u = new URL(endpoint),
+    local = ["127.0.0.1", "localhost", "[::1]"].includes(u.hostname);
+  if (
+    typeof allowRemote !== "boolean" ||
+    !["https:", "http:"].includes(u.protocol) ||
+    u.username ||
+    u.password ||
+    u.search ||
+    u.hash ||
+    u.pathname !== "/" ||
+    (!local && (!allowRemote || u.protocol !== "https:")) ||
+    (u.protocol === "https:" &&
+      process.env.NODE_TLS_REJECT_UNAUTHORIZED === "0")
+  )
+    throw new Error(
+      "S3 endpoint requires explicit remote permission and verified HTTPS",
+    );
+  if (
+    typeof bucket !== "string" ||
+    typeof region !== "string" ||
+    !/^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$/.test(bucket) ||
+    bucket.includes("..") ||
+    !/^[a-z0-9-]{1,63}$/.test(region)
+  )
+    throw new Error("Invalid S3 configuration");
+  return { endpoint: u.origin, bucket, region, allowRemote };
+}
 export class S3Backend {
   constructor({
     endpoint,
@@ -88,28 +121,15 @@ export class S3Backend {
     maxAttempts = 4,
     retryBaseMs = 100,
   }) {
-    const u = new URL(endpoint),
-      local = ["127.0.0.1", "localhost", "[::1]"].includes(u.hostname);
+    const destination = validateS3Destination({
+      endpoint,
+      bucket,
+      region,
+      allowRemote,
+    });
+    if (typeof allowRetention !== "boolean")
+      throw new Error("Invalid S3 budgets or retention authorization");
     if (
-      typeof allowRemote !== "boolean" ||
-      typeof allowRetention !== "boolean" ||
-      !["https:", "http:"].includes(u.protocol) ||
-      u.username ||
-      u.password ||
-      u.search ||
-      u.hash ||
-      u.pathname !== "/" ||
-      (!local && (!allowRemote || u.protocol !== "https:")) ||
-      (u.protocol === "https:" &&
-        process.env.NODE_TLS_REJECT_UNAUTHORIZED === "0")
-    )
-      throw new Error(
-        "S3 endpoint requires explicit remote permission and verified HTTPS",
-      );
-    if (
-      !/^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$/.test(bucket) ||
-      bucket.includes("..") ||
-      !/^[a-z0-9-]{1,63}$/.test(region) ||
       typeof accessKeyId !== "string" ||
       !/^[A-Za-z0-9_-]{3,128}$/.test(accessKeyId) ||
       typeof secretAccessKey !== "string" ||
@@ -139,7 +159,7 @@ export class S3Backend {
     )
       throw new Error("Invalid S3 budgets or retention authorization");
     this.config = {
-      endpoint: u.origin,
+      endpoint: destination.endpoint,
       bucket,
       region,
       accessKeyId,
@@ -270,9 +290,12 @@ export class S3Backend {
     });
     if (
       response.status !== 200 ||
+      (version && response.headers.get("x-amz-version-id") !== version) ||
       (checksum && sha(response.bytes) !== checksum)
     )
-      throw new Error("S3 readback rejected or checksum mismatch");
+      throw new Error(
+        "S3 readback rejected, version mismatch or checksum mismatch",
+      );
     return response;
   }
   async putImmutable(key, bytes) {

@@ -2,7 +2,15 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
-import { fixture, put, backup, call, tree, randomBytes } from "./helpers.mjs";
+import {
+  fixture,
+  put,
+  backup,
+  call,
+  tree,
+  randomBytes,
+  snapshot,
+} from "./helpers.mjs";
 import {
   createOperation,
   runOperation,
@@ -138,6 +146,43 @@ test("versioned capabilities fail closed, never load arbitrary providers", () =>
   assert.throws(() => providerCapabilities("../plugin"));
   assert.throws(() => requireCapabilities("s3", ["constructor"]));
 });
+test("chunk-boundary interruption persists partial file state and validates the prefix before completing", () =>
+  owned(async (f) => {
+    // Exercise 1024 real chunk boundaries without requiring 1024 fsync'd
+    // unique objects on slow CI disks. Distinct-prefix substitution is tested
+    // separately below; seeded random/unique object paths remain in regression.
+    const data = Buffer.alloc(1100000);
+    for (let offset = 0; offset < data.length; offset += 1024)
+      data.fill(
+        ((offset / 1024) % 4) + 1,
+        offset,
+        Math.min(offset + 1024, data.length),
+      );
+    put(f.source, "large.bin", data);
+    const operation = await createOperation({
+      repository: f.repo,
+      source: f.source,
+      arguments: ["--min", "1024", "--avg", "1024", "--max", "1024"],
+    });
+    call(["operation-resume", f.repo, operation], {
+      env: { MOONRESTORE_TEST_CRASH: "checkpoint-chunks" },
+      status: 1,
+    });
+    assert.equal(operationStatus(f.repo, operation).checkpoint_chunks, 1024);
+    assert.equal(fs.readdirSync(path.join(f.repo, "snapshots")).length, 0);
+    const j = new Journal(f.repo, operation);
+    try {
+      assert.equal(j.getPartial("large.bin").length, 1024);
+    } finally {
+      j.close();
+    }
+    const resumed = await runOperation(f.repo, operation, { recover: true });
+    assert.equal(resumed.state, "completed");
+    call(["verify", f.repo, resumed.snapshot]);
+    const target = path.join(f.base, "resumed");
+    call(["restore", f.repo, resumed.snapshot, target]);
+    assert.deepEqual(tree(target), tree(f.source));
+  }));
 
 test("a surviving worker lease prevents a second writer even if coordinator recovery is requested", () =>
   owned(async (f) => {
@@ -155,4 +200,63 @@ test("a surviving worker lease prevents a second writer even if coordinator reco
       worker.close();
     }
     assert.equal((await runOperation(f.repo, id)).ok, true);
+  }));
+
+test("partial checkpoints cannot substitute a valid object from a different source prefix and encrypted partials hide paths", () =>
+  owned(async (f) => {
+    put(f.source, "a-private.bin", Buffer.alloc(2048, 1));
+    put(f.source, "b-private.bin", Buffer.alloc(2048, 2));
+    const args = ["--min", "1024", "--avg", "1024", "--max", "1024"],
+      initial = backup(f, ...args),
+      manifest = snapshot(f, initial.snapshot),
+      before = fs.readdirSync(path.join(f.repo, "snapshots")).sort();
+    const part = manifest.entries.find((e) => e.path === "b-private.bin")
+        .chunks[0],
+      operation = await createOperation({
+        repository: f.repo,
+        source: f.source,
+        arguments: args,
+      });
+    const journal = new Journal(f.repo, operation);
+    try {
+      journal.putPartial({ path: "a-private.bin", parts: [part] });
+    } finally {
+      journal.close();
+    }
+    await assert.rejects(runOperation(f.repo, operation));
+    assert.deepEqual(
+      fs.readdirSync(path.join(f.repo, "snapshots")).sort(),
+      before,
+    );
+    call(["verify", f.repo, initial.snapshot]);
+    const old = process.env.MOONRESTORE_PASSWORD;
+    process.env.MOONRESTORE_PASSWORD = "synthetic-partial-password-only";
+    try {
+      const repository = path.join(f.base, "encrypted");
+      call(["init-encrypted", repository]);
+      const id = await createOperation({
+          repository,
+          source: f.source,
+          arguments: args,
+        }),
+        j = new Journal(repository, id);
+      try {
+        j.putPartial({ path: "a-private.bin", parts: [part] });
+        assert.equal(j.getPartial("a-private.bin").length, 1);
+        for (const name of fs.readdirSync(path.join(j.root, "files"))) {
+          assert.ok(!name.includes("a-private"));
+          assert.equal(
+            fs
+              .readFileSync(path.join(j.root, "files", name))
+              .includes(Buffer.from("a-private")),
+            false,
+          );
+        }
+      } finally {
+        j.close();
+      }
+    } finally {
+      if (old === undefined) delete process.env.MOONRESTORE_PASSWORD;
+      else process.env.MOONRESTORE_PASSWORD = old;
+    }
   }));

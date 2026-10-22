@@ -9,6 +9,36 @@ struct SourceEntry {
 pub extend SourceEntry with @json.FromJson::{from_json}
 
 ///|
+/// Resume only verifies and reuses committed chunk boundaries. Input prefixes
+/// are deliberately reread: a journal cannot prove unchanged source contents.
+fn checkpoint_chunk(
+  bytes : Bytes,
+  parts : Array[@core.ChunkRef],
+  previous : Array[@core.ChunkRef],
+  path : String,
+) -> (@core.ChunkRef, Bool) raise {
+  let part : @core.ChunkRef = { id: @core.digest(bytes), size: bytes.length(), }
+  let created = if parts.length() < previous.length() {
+    let expected = previous[parts.length()]
+    guard expected.id == part.id && expected.size == part.size else {
+      raise @core.Invalid("partial checkpoint source prefix changed")
+    }
+    ignore(get_object(expected))
+    false
+  } else {
+    store_object(bytes).1
+  }
+  parts.push(part)
+  if parts.length() > previous.length() && parts.length() % 1024 == 0 {
+    io_unit("checkpoint_partial_put", {
+      "path": Json(path),
+      "parts": Json(parts),
+    })
+  }
+  (part, created)
+}
+
+///|
 pub fn backup(
   source : String,
   label : String,
@@ -108,6 +138,26 @@ pub fn backup(
     let chunker = @core.Chunker::new(config~)
     let hash = @core.Hasher::new()
     let parts : Array[@core.ChunkRef] = []
+    let previous : Array[@core.ChunkRef] = @json.from_json(
+      io("checkpoint_partial_get", { "path": Json(item.path) }),
+    )
+    let prefix_size = previous.fold(init=0L, fn(total, p) {
+      total + p.size.to_int64()
+    })
+    guard prefix_size <= item.size else {
+      raise @core.Invalid("checkpoint prefix exceeds file")
+    }
+    @core.validate_checkpoint_entry(
+      {
+        path: item.path,
+        kind: "file",
+        size: prefix_size,
+        hash: @core.digest(b""),
+        chunks: previous,
+      },
+      config,
+      limits,
+    )
     let mut size = 0L
     while true {
       io_unit("read_source", { "max": 65536 })
@@ -121,8 +171,12 @@ pub fn backup(
       }
       hash.update(block)
       for bytes in chunker.push(block) {
-        let (part, created) = store_object(bytes)
-        parts.push(part)
+        let (_part, created) = checkpoint_chunk(
+          bytes,
+          parts,
+          previous,
+          item.path,
+        )
         chunk_count += 1
         guard chunk_count <= limits.max_chunks else {
           raise @core.Invalid("chunk count limit exceeded")
@@ -135,8 +189,7 @@ pub fn backup(
       }
     }
     if chunker.finish() is Some(bytes) {
-      let (part, created) = store_object(bytes)
-      parts.push(part)
+      let (_part, created) = checkpoint_chunk(bytes, parts, previous, item.path)
       chunk_count += 1
       guard chunk_count <= limits.max_chunks else {
         raise @core.Invalid("chunk count limit exceeded")
@@ -148,6 +201,9 @@ pub fn backup(
       }
     }
     io_unit("close_source", Json::null())
+    guard parts.length() >= previous.length() else {
+      raise @core.Invalid("checkpoint prefix incomplete")
+    }
     guard size == item.size else { raise @core.Invalid("source size changed") }
     total += size
     guard total <= limits.max_total_bytes else {

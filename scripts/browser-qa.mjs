@@ -18,7 +18,8 @@ if (
   throw new Error("Only the owned synthetic UI fixture is supported");
 const fixture = JSON.parse(fs.readFileSync(fixtureFile));
 if (
-  fixture.origin !== "http://127.0.0.1:8790" ||
+  !/^http:\/\/127\.0\.0\.1:[1-9][0-9]{0,4}$/.test(fixture.origin) ||
+  new URL(fixture.url).origin !== fixture.origin ||
   !fixture.source.startsWith(path.dirname(fixtureFile) + path.sep)
 )
   throw new Error("Invalid UI fixture");

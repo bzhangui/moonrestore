@@ -9,6 +9,17 @@ const parent = mkdirPrivate(
     fileURLToPath(new URL("../.local/", import.meta.url)),
   ),
   root = fs.mkdtempSync(path.join(parent, "ui-pilot-"));
+const requestedPort =
+  process.argv[2] === undefined ? 8790 : Number(process.argv[2]);
+if (
+  process.argv.length > 3 ||
+  !Number.isInteger(requestedPort) ||
+  requestedPort < 0 ||
+  requestedPort > 65535
+)
+  throw new Error(
+    "Expected optional explicit port (0 chooses a free loopback port)",
+  );
 process.env.MOONRESTORE_HOME = path.join(root, "state");
 const source = path.join(root, "source"),
   repository = path.join(root, "vault");
@@ -18,7 +29,7 @@ await core(["init", repository]);
 await core(["backup", repository, source, "--label", "受控初稿"]);
 fs.writeFileSync(path.join(source, "paper.txt"), "Controlled second revision.");
 fs.writeFileSync(path.join(source, "data.csv"), "a,b\n1,2\n");
-const app = await startWorkbench({ port: 8790 });
+const app = await startWorkbench({ port: requestedPort });
 writePrivate(
   path.join(root, "session.json"),
   JSON.stringify({

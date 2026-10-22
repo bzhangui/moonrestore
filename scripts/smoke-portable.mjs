@@ -80,8 +80,19 @@ try {
   } finally {
     db.close();
   }
+  const sqlite = run(["sqlite-backup", repository, database]);
+  assert.equal(sqlite.post_restore_readback, true);
+  assert.equal(sqlite.restored_database_opened, true);
+  const sqliteTarget = path.join(root, "sqlite-recovered");
   assert.equal(
-    run(["sqlite-backup", repository, database]).post_restore_readback,
+    run([
+      "sqlite-recover",
+      repository,
+      sqlite.snapshot,
+      sqliteTarget,
+      "--confirm",
+      sqliteTarget,
+    ]).sqlite_integrity_checked,
     true,
   );
   const durable = run(["backup-resumable", repository, source]);
@@ -204,6 +215,28 @@ try {
     "controlled portable backup",
   );
   const support = run(["support-report"]);
+  assert.equal(run(["readiness"]).kind, "recovery_readiness");
+  assert.equal(run(["state-status"]).automatic_migration, false);
+  assert.equal(
+    run(["remote-writer-policy", "controlled-bucket", "moonrestore"]).applied,
+    false,
+  );
+  const migratedState = path.join(root, "migrated-state"),
+    statePreview = run([
+      "state-migrate-preview",
+      env.MOONRESTORE_HOME,
+      migratedState,
+    ]);
+  assert.equal(
+    run([
+      "state-migrate",
+      env.MOONRESTORE_HOME,
+      migratedState,
+      "--confirm",
+      statePreview.confirmation,
+    ]).credentials_copied,
+    false,
+  );
   assert.equal(JSON.stringify(support).includes(root), false);
   assert.equal(support.secrets_included, false);
   env.MOONRESTORE_DEST_PASSWORD = "synthetic-new-key-password";
@@ -233,6 +266,8 @@ try {
       detached_signature_and_anchor: true,
       offline_rescue_fresh_state: true,
       allowlisted_diagnostics: true,
+      readiness_and_safe_state_migration: true,
+      sqlite_recovery_reopened: true,
     }),
   );
 } finally {

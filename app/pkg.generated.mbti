@@ -36,6 +36,9 @@ pub fn verify(String) -> Json raise
 // Errors
 
 // Types and methods
+type GoalInput derive(@json.FromJson)
+pub fn GoalInput::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+
 type SourceEntry derive(@json.FromJson)
 pub fn SourceEntry::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 

@@ -25,8 +25,10 @@ const summary = (c) => ({
   operation: c.id,
   kind: c.kind,
   state: c.state,
+  started: c.started,
   snapshot: c.snapshot || c.pendingSnapshot || null,
   checkpoint_files: c.files || 0,
+  checkpoint_chunks: c.partialChunks || 0,
   post_restore_readback: c.readback === true,
   error_code: c.errorCode || null,
 });
@@ -105,6 +107,18 @@ export class DurableBackupHost extends Host {
       this.control.files = (this.control.files || 0) + 1;
       this.journal.save(this.control);
       crash("checkpoint-file");
+      return null;
+    }
+    if (op === "checkpoint_partial_get" || op === "checkpoint_partial_put") {
+      this.requireLock();
+      if (!this.ready) throw new Error("Checkpoint not prepared");
+      safeRelative(a.path);
+      if (op === "checkpoint_partial_get")
+        return this.journal.getPartial(a.path);
+      this.journal.putPartial(a);
+      this.control.partialChunks = a.parts.length;
+      this.journal.save(this.control);
+      crash("checkpoint-chunks");
       return null;
     }
     if (op === "commit") {

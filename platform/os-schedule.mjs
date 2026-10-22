@@ -64,8 +64,27 @@ export function installTask(preview, confirmation) {
     confirmation !== preview.task
   )
     throw new Error("Confirm the exact preview task name");
+  // Require a responsive read-only RPC before any registration attempt.
+  const health = spawnSync(
+    "powershell.exe",
+    [
+      "-NoProfile",
+      "-NonInteractive",
+      "-Command",
+      "$ErrorActionPreference='Stop';$s=New-Object -ComObject 'Schedule.Service';$s.Connect();$null=$s.GetRunningTasks(0).Count;Write-Output 'scheduler-responsive'",
+    ],
+    { encoding: "utf8", timeout: 5000, windowsHide: true, shell: false },
+  );
+  if (
+    health.error ||
+    health.status !== 0 ||
+    health.stdout.trim() !== "scheduler-responsive"
+  )
+    throw new Error(
+      "Windows scheduler health check timed out or failed; registration was not attempted",
+    );
   const script =
-    "$ErrorActionPreference='Stop';$v=[Console]::In.ReadToEnd()|ConvertFrom-Json;if(Get-ScheduledTask -TaskName $v.task -ErrorAction SilentlyContinue){throw 'Task exists; not overwritten'};$xml=$v.xml.Replace('{{SID}}',[Security.Principal.WindowsIdentity]::GetCurrent().User.Value);Register-ScheduledTask -TaskName $v.task -Xml $xml|Out-Null";
+    "$ErrorActionPreference='Stop';try{$v=[Console]::In.ReadToEnd()|ConvertFrom-Json;$sid=[Security.Principal.WindowsIdentity]::GetCurrent().User.Value;$s=New-Object -ComObject 'Schedule.Service';$s.Connect();$folder=$s.GetFolder('\\');$xml=$v.xml.Replace('{{SID}}',$sid);$folder.RegisterTask($v.task,$xml,2,$sid,$null,3,$null)|Out-Null}catch{@{code=$_.Exception.HResult.ToString('X8')}|ConvertTo-Json -Compress;exit 1}";
   const r = spawnSync(
     "powershell.exe",
     ["-NoProfile", "-NonInteractive", "-Command", utf8JsonScript(script)],
@@ -77,8 +96,20 @@ export function installTask(preview, confirmation) {
       shell: false,
     },
   );
-  if (r.error || r.status !== 0)
-    throw new Error("OS schedule registration failed or task already exists");
+  if (r.error || r.status !== 0) {
+    let code =
+      r.error?.code === "ETIMEDOUT"
+        ? "timeout_registration_unconfirmed"
+        : "unavailable";
+    try {
+      const record = JSON.parse((r.stdout || "").replace(/^\uFEFF/, ""));
+      if (/^[A-Fa-f0-9]{8}$/.test(record.code)) code = record.code;
+    } catch {}
+    throw new Error(
+      "OS schedule registration not confirmed; inspect this exact preview task before retrying; code=" +
+        code,
+    );
+  }
   return {
     ok: true,
     task: preview.task,

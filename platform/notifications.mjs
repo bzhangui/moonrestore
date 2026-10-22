@@ -39,7 +39,11 @@ export function notify(job, code, { desktop = false } = {}) {
         ? "备份及配置的校验/副本步骤完成。"
         : code === "device_unavailable"
           ? "备份设备离线；检查连接后重试。"
-          : "备份任务未完成；请打开工作台查看。",
+          : code === "schedule_missing"
+            ? "计划已超过到期宽限，但未观察到执行。请检查系统任务、登录状态及设备连接。"
+            : code === "readiness_incomplete"
+              ? "恢复准备度未达配置目标；请查看校验、演练及副本分项。"
+              : "备份任务未完成；请打开工作台查看。",
   };
   const temporary = path.join(stateHome(), randomUUID() + ".notice");
   writePrivate(temporary, JSON.stringify([entry, ...history].slice(0, 100)));

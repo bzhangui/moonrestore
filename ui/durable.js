@@ -7,6 +7,81 @@ const element = (tag, text) => {
 const feedback = (text) => {
   $("durable-feedback").textContent = text;
 };
+document.addEventListener("moonrestore-idle", () => {
+  for (const b of document.querySelectorAll("[data-os-confirm]"))
+    b.disabled = b.dataset.osConfirm !== "ready";
+});
+async function renderReadiness() {
+  const report = await api("readiness", {}),
+    list = $("readiness-list");
+  list.replaceChildren();
+  if (report.issues.length)
+    list.append(element("p", "计划调度记录异常；本次不能判定恢复准备度通过。"));
+  if (!report.plans.length) {
+    list.append(
+      element("p", "尚无计划。请先建立并完成一次备份、校验与恢复演练。"),
+    );
+    return;
+  }
+  for (const p of report.plans) {
+    const row = element("article");
+    row.className = "readiness-row";
+    row.append(
+      element("strong", p.name),
+      element(
+        "p",
+        p.ready
+          ? "证据与配置目标均满足；不是未来恢复保证。"
+          : "待处理：" + p.reasons.join(" / "),
+      ),
+      element(
+        "small",
+        "RPO：" +
+          ({ within: "窗口内", unknown: "未知", exceeded: "超出目标" }[
+            p.goal.rpo_state
+          ] || p.goal.rpo_state) +
+          " · RTO演练：" +
+          ({
+            within: "目标内",
+            unknown: "未知",
+            exceeded: "超出目标",
+            not_configured: "未设置",
+          }[p.goal.rto_state] || p.goal.rto_state) +
+          " · 调度：" +
+          ({
+            not_configured: "未配置",
+            scheduled: "等待到期",
+            due: "已到期",
+            running: "执行中",
+            missing: "执行缺席",
+            running_overdue: "执行超时",
+            disabled: "已禁用",
+            blocked: "已阻断",
+            clock_discontinuity: "时钟异常",
+          }[p.schedule] || p.schedule),
+      ),
+      element(
+        "small",
+        p.real_independent_copy_verified
+          ? "已有独立副本验证记录"
+          : "独立设备/真实云副本尚未验证",
+      ),
+    );
+    list.append(row);
+  }
+}
+$("readiness-refresh").onclick = () => action(renderReadiness);
+$("state-location").onclick = () =>
+  action(async () => {
+    const r = await api("state-status", {});
+    show(r);
+    $("state-current").textContent =
+      "当前私有目录：" +
+      r.active +
+      (r.unified
+        ? " · 已统一"
+        : " · 未自动搬迁；CLI与桌面可显式使用同一 --home。");
+  });
 async function renderPlans() {
   const result = await api("plans", {}),
     schedules = (await api("plan-schedules", {})).schedules,
@@ -49,7 +124,11 @@ async function renderPlans() {
           "span",
           label +
             "：" +
-            (point ? new Date(point.finished).toLocaleString() : "未完成") +
+            (point
+              ? new Date(point.finished).toLocaleString()
+              : p.stages?.[key]?.required === false
+                ? "未配置/不要求"
+                : "未完成") +
             " · " +
             (names[p.stages?.[key]?.state] || "未知"),
         ),
@@ -132,6 +211,46 @@ async function renderPlans() {
       ),
       save,
     );
+    const osPreview = element("button", "预览 Windows 独立调度任务"),
+      osInstall = element("button", "确认注册预览任务");
+    osPreview.type = osInstall.type = "button";
+    osPreview.className = osInstall.className = "secondary";
+    osInstall.disabled = true;
+    let exactTask;
+    osInstall.dataset.osConfirm = "not_ready";
+    osPreview.onclick = () =>
+      action(async () => {
+        exactTask = null;
+        osInstall.dataset.osConfirm = "not_ready";
+        osInstall.disabled = true;
+        const r = await api("plan-os-preview", { id: p.id });
+        show(r);
+        exactTask = r.task;
+        osInstall.dataset.osConfirm = "ready";
+        osInstall.disabled = false;
+        feedback(
+          "仅预览：" + r.task + "。仅当前用户登录时运行；尚未注册或执行。",
+        );
+      });
+    osInstall.onclick = () =>
+      action(async () => {
+        if (
+          !exactTask ||
+          !confirm(
+            "确认注册专用任务 " +
+              exactTask +
+              "？不会请求管理员权限；既有同名任务不会覆盖。",
+          )
+        )
+          return;
+        const confirmation = exactTask;
+        exactTask = null;
+        osInstall.dataset.osConfirm = "not_ready";
+        osInstall.disabled = true;
+        show(await api("plan-os-install", { id: p.id, confirmation }));
+        feedback("已确认注册；实际触发与恢复验证仍需独立检查。");
+      });
+    controls.append(osPreview, osInstall);
     row.append(title, evidence, state, button, controls);
     list.append(row);
   }
@@ -140,15 +259,89 @@ $("plans-refresh").onclick = () => action(renderPlans);
 $("durable-plan-form").onsubmit = (e) => {
   e.preventDefault();
   action(async () => {
-    const r = await api("plan-save", {
+    const type = $("durable-type").value,
+      remote = $("durable-remote").checked;
+    const config = {
       name: $("durable-name").value.trim(),
-      type: $("durable-type").value,
+      type,
       repository: $("durable-repository").value.trim(),
-      source: $("durable-source").value.trim(),
-    });
+      rpoHours: Number($("durable-rpo").value),
+      rtoMinutes: Number($("durable-rto").value),
+      ...(type === "postgresql"
+        ? {
+            postgres: {
+              database: $("durable-pg-database").value.trim(),
+              user: $("durable-pg-user").value.trim(),
+              host: "127.0.0.1",
+              port: 5432,
+              dumpExecutable: $("durable-pg-dump").value.trim(),
+              restoreExecutable: $("durable-pg-restore").value.trim(),
+            },
+          }
+        : { source: $("durable-source").value.trim() }),
+      ...($("durable-replica").value.trim()
+        ? { replica: $("durable-replica").value.trim() }
+        : {}),
+      ...(remote
+        ? {
+            remote: {
+              endpoint: $("durable-remote-endpoint").value.trim(),
+              bucket: $("durable-remote-bucket").value.trim(),
+              region: $("durable-remote-region").value.trim(),
+              prefix: "moonrestore",
+              accessKeyEnv: "MOONRESTORE_S3_ACCESS_KEY_ID",
+              secretKeyEnv: "MOONRESTORE_S3_SECRET_ACCESS_KEY",
+              allowRemote: $("durable-remote-consent").checked,
+            },
+          }
+        : {}),
+    };
+    if (remote && !$("durable-remote-consent").checked)
+      throw new Error("远端计划需明确同意联网；密码和访问密钥不在页面填写。");
+    const r = await api("plan-save", config);
     show(r);
     feedback("计划已私有保存；不会自动运行。");
     await renderPlans();
+  });
+};
+$("durable-type").onchange = () => {
+  $("durable-postgres-fields").hidden =
+    $("durable-type").value !== "postgresql";
+  $("durable-source").required = $("durable-type").value !== "postgresql";
+  for (const id of [
+    "durable-pg-database",
+    "durable-pg-user",
+    "durable-pg-dump",
+    "durable-pg-restore",
+  ])
+    $(id).required = $("durable-type").value === "postgresql";
+};
+$("durable-remote").onchange = () => {
+  $("durable-remote-fields").hidden = !$("durable-remote").checked;
+  for (const id of [
+    "durable-remote-endpoint",
+    "durable-remote-bucket",
+    "durable-remote-region",
+    "durable-remote-consent",
+  ])
+    $(id).required = $("durable-remote").checked;
+};
+$("rescue-kit-form").onsubmit = (e) => {
+  e.preventDefault();
+  action(async () => {
+    if (!$("rescue-kit-accept").checked)
+      throw new Error("请核对独立保存的运行包摘要并确认新目录。");
+    const destination = $("rescue-kit-destination").value.trim();
+    const r = await api("rescue-kit-create", {
+      repository: $("rescue-kit-repository").value.trim(),
+      snapshot: $("rescue-kit-snapshot").value.trim(),
+      bundle: $("rescue-kit-bundle").value.trim(),
+      manifestSha256: $("rescue-kit-sha").value.trim(),
+      destination,
+      confirmation: destination,
+    });
+    show(r);
+    feedback("救援包已生成；请独立私有保存 recipe_sha256，密钥必须另存。");
   });
 };
 const resume = () => ({

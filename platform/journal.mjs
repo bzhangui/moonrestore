@@ -180,6 +180,31 @@ export class Journal {
   putFile(entry) {
     const file = this.filePath(entry.path);
     atomicPrivate(file, this.encode("file-" + hash(entry.path), entry));
+    const partial = this.filePath(entry.path) + ".partial";
+    if (fs.existsSync(partial)) fs.unlinkSync(checked(partial));
+  }
+  getPartial(relative) {
+    const file = this.filePath(relative) + ".partial";
+    if (!fs.existsSync(file)) return [];
+    const record = this.read("partial-" + hash(relative), file);
+    if (
+      record.path !== relative ||
+      !Array.isArray(record.parts) ||
+      record.parts.length > 1000000
+    )
+      throw new Error("Invalid partial checkpoint");
+    return record.parts;
+  }
+  putPartial(record) {
+    if (
+      !record ||
+      typeof record.path !== "string" ||
+      !Array.isArray(record.parts) ||
+      record.parts.length > 1000000
+    )
+      throw new Error("Invalid partial checkpoint");
+    const file = this.filePath(record.path) + ".partial";
+    atomicPrivate(file, this.encode("partial-" + hash(record.path), record));
   }
   clearStale(name, recover = false) {
     if (!["run.lock", "worker.lock"].includes(name))

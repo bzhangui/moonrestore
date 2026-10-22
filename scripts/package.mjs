@@ -36,6 +36,7 @@ fs.mkdirSync(destination); // Never overwrite a previous bundle.
 const files = [
   "bin/moonrestore.mjs",
   "bin/sqlite-export.mjs",
+  "bin/sqlite-verify.mjs",
   "platform/adapter.mjs",
   "scripts/console.ps1",
   "scripts/verify-package.mjs",
@@ -52,9 +53,13 @@ const files = [
   "platform/recovery.mjs",
   "platform/recovery-target.mjs",
   "platform/applications.mjs",
+  "platform/sqlite-recovery.mjs",
   "platform/search-index.mjs",
   "platform/s3.mjs",
   "platform/remote.mjs",
+  "platform/remote-audit.mjs",
+  "platform/readiness.mjs",
+  "platform/state-migration.mjs",
   "platform/snapshot-provider.mjs",
   "platform/contracts.mjs",
   "platform/journal.mjs",
@@ -75,6 +80,7 @@ const files = [
   "ui/enhancements.js",
   "ui/recovery.js",
   "ui/durable.js",
+  "ui/readiness.js",
   "_build/js/release/build/cmd/main/main.js",
   "examples/demo.mjs",
   "examples/scenarios.mjs",
@@ -94,6 +100,7 @@ const files = [
   "docs/REMOTE.md",
   "docs/RELIABILITY_0_5.md",
   "docs/RELIABILITY_0_6.md",
+  "docs/RELIABILITY_0_7.md",
 ];
 if (process.platform !== "win32") files.push("_build/host/rename_noreplace");
 if (embedded)

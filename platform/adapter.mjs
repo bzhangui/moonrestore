@@ -442,8 +442,12 @@ export class Host {
       case "checkpoint_prepare":
       case "checkpoint_get":
       case "checkpoint_put":
+      case "checkpoint_partial_put":
         this.requireLock();
         return null; // Ordinary operations remain stateless.
+      case "checkpoint_partial_get":
+        this.requireLock();
+        return [];
       case "init": {
         const encrypted = this.environment.MOONRESTORE_INIT_ENCRYPTED === "1";
         const large = this.environment.MOONRESTORE_INIT_LARGE === "1";
