@@ -32,6 +32,8 @@ Windows x64，项目私有 moonc 0.10.15+943464bfa / moon 0.1.20261012、Node 24
 
 大文件专项：`node scripts/large-file.mjs --checkpoint-resume --durable-restore`，临时盘至少预留6GiB。新增公共树预检 `node scripts/audit-public.mjs` 已纳入默认validate，检查公开文件名/已知令牌模式、本地Markdown链接和必需许可文件；不是完整秘密扫描或安全审计，发布前仍需人工核对暂存内容。
 
+功能提交 `d4d9863` 的 [CI 39796077170](https://github.com/bzhangui/moonrestore/actions/runs/39796077170) 四项全部成功：CI使用moonc0.10.17（本机私有SDK仍为0.10.15），三平台四目标及便携包通过，Windows139通过/1跳过，Ubuntu/macOS各135通过/5跳过，均0失败；独立PostgreSQL16真实恢复1通过/0跳过。Windows原生启动器编译通过，核心覆盖仍463/497。工作流总状态与最终分项均核对；分项接口短暂显示延迟不能当作已完成，已用最终状态确认。其后文档补录不改变功能证据，补录提交自身CI单独核对。
+
 ## 0.6.0 持续运行与独立救援（2026-10-18）
 
 Windows x64，项目私有 moonc 0.10.15+943464bfa / moon 0.1.20261012、Node 24.15.0；不改全局 SDK，不操作用户原始资料或既有任务。新增 0.6 源码不等于注册表已发布；本轮授权仅 GitHub，Mooncakes 保持 0.5.0。
