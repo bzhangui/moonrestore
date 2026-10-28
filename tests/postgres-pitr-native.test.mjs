@@ -167,6 +167,10 @@ test(
       const log = path.join(f.base, "isolated", "isolated-server.log");
       if (fs.existsSync(log)) {
         const text = fs.readFileSync(log, "utf8").slice(-65536);
+        for (const match of text.matchAll(
+          /invalid value for parameter "([a-z_]+)"/g,
+        ))
+          console.error("Synthetic invalid configuration key: " + match[1]);
         for (const reason of [
           "invalid permissions",
           "recovery ended before configured recovery target was reached",
