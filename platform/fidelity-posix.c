@@ -15,7 +15,8 @@
 #endif
 /* Bounded line protocol: hex avoids filename/value escaping and shell parsing.
  * Only a caller-validated individual path; never follows a final symlink. */
-static int fail(void){fputs("fidelity capability/permission/budget rejected\n",stderr);return 2;}
+static const char *phase="input";
+static int fail(void){fprintf(stderr,"FIDELITY_%s_%d\n",phase,errno);return 2;}
 static void hex(const unsigned char *p,size_t n){for(size_t i=0;i<n;i++)printf("%02x",p[i]);}
 static int digit(char c){if(c>='0'&&c<='9')return c-'0';if(c>='a'&&c<='f')return c-'a'+10;return -1;}
 static unsigned char *unhex(const char *s,size_t *n){size_t z=strlen(s);if(z%2||z>262144)return NULL;unsigned char *p=malloc(z/2+1);if(!p)return NULL;for(size_t i=0;i<z;i+=2){int a=digit(s[i]),b=digit(s[i+1]);if(a<0||b<0){free(p);return NULL;}p[i/2]=(unsigned char)(a*16+b);}*n=z/2;p[*n]=0;return p;}
@@ -43,16 +44,35 @@ static int put(const char *p,const char *k,const void *b,size_t n){
  return lsetxattr(p,k,b,n,0);
 #endif
 }
+#ifdef __APPLE__
+/* acl_get_file alone conflates a missing ACL property and a missing path.
+ * Query descriptor-bound extended security after proving the same inode and
+ * filesystem support; normalize a successfully queried absent property to an
+ * empty ACL. Any access/capability/query failure still refuses capture. */
+static acl_t captured_acl(const char *p,const struct stat *initial){
+ phase="acl_open";int fd=open(p,O_RDONLY|O_NOFOLLOW);if(fd<0)return NULL;
+ struct stat now;phase="acl_capability";
+ if(fstat(fd,&now)||now.st_dev!=initial->st_dev||now.st_ino!=initial->st_ino||fpathconf(fd,_PC_EXTENDED_SECURITY_NP)!=1){close(fd);return NULL;}
+ filesec_t security=filesec_init();if(!security){close(fd);return NULL;}
+ phase="acl_security";acl_t acl=NULL;int present=0;
+ if(fstatx_np(fd,&now,security)==0&&now.st_dev==initial->st_dev&&now.st_ino==initial->st_ino&&filesec_query_property(security,FILESEC_ACL,&present)==0){
+   phase="acl_value";
+   if(present){if(filesec_get_property(security,FILESEC_ACL,&acl)!=0)acl=NULL;}
+   else acl=acl_init(0);
+ }
+ filesec_free(security);close(fd);return acl;
+}
+#endif
 int main(int argc,char **argv){
  if(argc==2&&!strcmp(argv[1],"probe")){puts("FIDELITY1");return 0;}
  if(argc<3)return fail();
  const char *action=argv[1],*p=argv[2];struct stat st;
  if(lstat(p,&st)||(!S_ISREG(st.st_mode)&&!S_ISDIR(st.st_mode)))return fail();
  if(!strcmp(action,"capture")){
-  char keys[65536];ssize_t n=names(p,keys,sizeof(keys));if(n<0)return fail();size_t total=0;int count=0;
+  phase="xattr_list";char keys[65536];ssize_t n=names(p,keys,sizeof(keys));if(n<0)return fail();size_t total=0;int count=0;
   for(ssize_t at=0;at<n;){size_t len=strnlen(keys+at,(size_t)(n-at));if(!len||at+(ssize_t)len>=n||++count>128)return fail();unsigned char data[65536];ssize_t bytes=value(p,keys+at,data,sizeof(data));if(bytes<0||(total+=(size_t)bytes)>131072)return fail();printf("X ");hex((unsigned char*)keys+at,len);printf(" ");hex(data,(size_t)bytes);puts("");at+=(ssize_t)len+1;}
 #ifdef __APPLE__
-  acl_t acl=acl_get_file(p,ACL_TYPE_EXTENDED);if(!acl)return fail();ssize_t size=0;char *text=acl_to_text(acl,&size);if(!text||size<0||size>65536){acl_free(acl);return fail();}printf("A ");hex((unsigned char*)text,(size_t)size);puts("");acl_free(text);acl_free(acl);
+  acl_t acl=captured_acl(p,&st);if(!acl)return fail();phase="acl_text";ssize_t size=0;char *text=acl_to_text(acl,&size);if(!text||size<0||size>65536){acl_free(acl);return fail();}printf("A ");hex((unsigned char*)text,(size_t)size);puts("");acl_free(text);acl_free(acl);
 #endif
   if(S_ISREG(st.st_mode)&&st.st_size>0){int fd=open(p,O_RDONLY|O_NOFOLLOW);if(fd<0)return fail();off_t at=0;int ranges=0;while(at<st.st_size){errno=0;off_t data=lseek(fd,at,SEEK_DATA);if(data<0&&errno==ENXIO)break;if(data<0){close(fd);return fail();}off_t end=lseek(fd,data,SEEK_HOLE);if(end<=data||++ranges>4096){close(fd);return fail();}if(end>st.st_size)end=st.st_size;printf("R %lld %lld\n",(long long)data,(long long)(end-data));at=end;}close(fd);}puts("OK");return 0;
  }

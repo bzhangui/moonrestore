@@ -589,6 +589,9 @@ export async function runPagedRestore(
             : "birthtime_and_ctime_information_only",
           "physical_allocation_not_bit_identical",
           "special_mode_bits_and_vendor_specific_attributes_not_archived",
+          ...(process.platform === "win32"
+            ? ["windows_acl_inheritance_frozen_original_descriptor_archived"]
+            : []),
         ]
       : ["extended_metadata_not_restored"];
     journal.save("head", r);

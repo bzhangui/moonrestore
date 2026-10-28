@@ -44,6 +44,10 @@ function native(action, file, metadata) {
   );
   if (r.error || r.status !== 0) {
     let code = "";
+    if (process.platform !== "win32") {
+      const found = r.stderr?.match(/^FIDELITY_([a-z_]+)_(\d+)\s*$/);
+      if (found) code = " (" + found[1] + ":errno" + found[2] + ")";
+    }
     if (process.platform === "win32")
       try {
         const v = JSON.parse(r.stdout);
@@ -514,10 +518,15 @@ export function applyFidelity(file, m, { permissions = false } = {}) {
 export function verifyFidelity(file, m) {
   const before = fs.lstatSync(checked(file), { bigint: true }),
     actual = captureNative(file);
+  const expected = { ...m.native };
+  if (process.platform === "win32") {
+    actual.acl = native("acl-normalize", file, { acl: actual.acl });
+    expected.acl = native("acl-normalize", file, { acl: m.native.acl });
+  }
   if (
     !metadataEqual(
       { ...actual, ranges: null },
-      { ...m.native, ranges: null },
+      { ...expected, ranges: null },
     ) ||
     (m.native.sparse && !metadataEqual(actual.ranges, m.native.ranges)) ||
     String(before.mtimeNs) !== m.mtime_ns ||
@@ -532,7 +541,7 @@ export function verifyFidelity(file, m) {
       "Native metadata readback mismatch: " +
         [
           ...Object.keys(m.native).filter(
-            (k) => k !== "ranges" && !metadataEqual(actual[k], m.native[k]),
+            (k) => k !== "ranges" && !metadataEqual(actual[k], expected[k]),
           ),
           ...[
             "mtime",

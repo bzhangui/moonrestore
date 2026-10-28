@@ -30,6 +30,39 @@ import {
   previewPagedRestore,
   restorePagedSelection,
 } from "../platform/paged-selection.mjs";
+test(
+  "Windows effective ACL normalizer retains permissions, rejects deny-after-allow and never erases an extra grant",
+  { skip: process.platform !== "win32" },
+  () =>
+    setup(async (f) => {
+      put(f.source, "acl.txt", "synthetic");
+      const file = path.join(f.source, "acl.txt"),
+        helper = path.join(project, "_build/host/fidelity.exe");
+      const norm = (acl) =>
+        spawnSync(helper, [], {
+          input: JSON.stringify({
+            action: "acl-normalize",
+            path: file,
+            metadata: { acl },
+          }),
+          encoding: "utf8",
+        });
+      const a = norm("O:SYG:SYD:AI(A;ID;FR;;;WD)(A;ID;FW;;;SY)"),
+        b = norm("O:SYG:SYD:P(A;;FW;;;SY)(A;;FR;;;WD)");
+      assert.equal(a.status, 0);
+      assert.equal(b.status, 0);
+      assert.equal(JSON.parse(a.stdout).result, JSON.parse(b.stdout).result);
+      const extra = norm("O:SYG:SYD:P(A;;FW;;;SY)(A;;FRFW;;;WD)");
+      assert.equal(extra.status, 0);
+      assert.notEqual(
+        JSON.parse(extra.stdout).result,
+        JSON.parse(a.stdout).result,
+      );
+      for (const sddl of ["O:SYG:SY", "O:SYG:SYD:P(A;;FR;;;WD)(D;;FW;;;WD)"])
+        assert.notEqual(norm(sddl).status, 0);
+    }),
+);
+
 async function setup(work) {
   const f = fixture(),
     old = process.env.MOONRESTORE_HOME;
@@ -468,8 +501,67 @@ test("native format5 captures and restores attributes, streams/xattrs, hardlinks
       fs.statSync(path.join(target, "文本.txt")).ino,
       fs.statSync(path.join(target, "alias.txt")).ino,
     );
-    assert.deepEqual(captureNative(path.join(target, "文本.txt")), original);
+    const actual = captureNative(path.join(target, "文本.txt"));
+    if (process.platform === "win32") {
+      assert.ok(
+        r.metadata_losses.includes(
+          "windows_acl_inheritance_frozen_original_descriptor_archived",
+        ),
+      );
+      assert.match(actual.acl, /D:P/);
+      // Effective ACL/owner/group equality is verified by the trusted helper;
+      // inheritance provenance is explicitly normalized, not claimed identical.
+      actual.acl = original.acl;
+    }
+    assert.deepEqual(actual, original);
   }));
+
+test(
+  "macOS descriptor security distinguishes absent ACL from populated ACL and restores explicit entries",
+  { skip: process.platform !== "darwin" },
+  () =>
+    setup(async (f) => {
+      const repo = path.join(f.base, "fidelity");
+      await PagedStore.create(repo, { fidelity: true });
+      put(f.source, "explicit.txt", "ACL synthetic fixture");
+      const file = path.join(f.source, "explicit.txt"),
+        empty = captureNative(file).acl;
+      assert.equal(typeof empty, "string");
+      assert.match(empty, /^!#acl /);
+      const change = spawnSync(
+        "/bin/chmod",
+        [
+          "+a",
+          `user:${process.getuid()} allow read,write,readattr,writeattr,readextattr,writeextattr,readsecurity,writesecurity`,
+          file,
+        ],
+        { encoding: "utf8" },
+      );
+      assert.equal(
+        change.status,
+        0,
+        "Cannot set an explicit ACL on owned synthetic fixture",
+      );
+      const populated = captureNative(file).acl;
+      assert.notEqual(populated, empty);
+      const b = await backupPaged(repo, f.source),
+        target = path.join(f.base, "native-acl"),
+        op = await createPagedRestore(repo, b.snapshot, target, {
+          confirmation: target,
+          permissions: true,
+        });
+      assert.equal(
+        (await runPagedRestore(repo, op.operation)).metadata_profile_verified,
+        true,
+      );
+      assert.equal(
+        captureNative(path.join(target, "explicit.txt")).acl,
+        populated,
+      );
+      assert.equal(spawnSync("/bin/chmod", ["-N", file]).status, 0);
+      assert.equal(captureNative(file).acl, empty);
+    }),
+);
 
 test("format5 native interruption, sparse holes, read-only attributes, empty source and selected hardlink subset", () =>
   setup(async (f) => {

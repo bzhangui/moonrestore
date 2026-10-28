@@ -47,14 +47,18 @@ node bin/moonrestore.mjs restore-resumable NEW_REPO SNAPSHOT NEW_TARGET --permis
 | --- | --- |
 | 内容/目录 | 全部字节读回、相对路径、空文件/空目录，包含源根目录元数据 |
 | 时间 | atime/mtime十进制纳秒归档；Windows原生100ns精度，含creation time恢复；POSIX原生utimensat读回。探测可能改变atime，之后重设并stat核对 |
-| Windows | 普通权限下DACL/owner/group的SDDL、安全属性、每文件≤16个ADS/总64KiB；源EFS、压缩、重解析点拒绝。不启用特权，不处理SACL/完整性标签或全部NTFS特性 |
+| Windows | 原始DACL/owner/group的SDDL归档；恢复为受保护显式ACL，保持有效ACE顺序/权限/属主并阻止新父目录追加规则，不保留原继承拓扑。安全属性、每文件≤16个ADS/总64KiB；源EFS、压缩、重解析点拒绝。不启用特权，不处理SACL/完整性标签或全部NTFS特性 |
 | Linux/macOS | uid/gid、基础mode、二进制xattr；macOS另含extended ACL。有权应用并读回才成功，不提权。特殊mode位不归档；POSIX birthtime只记录不恢复 |
 | 稀疏 | 捕获系统报告的分配范围，只写这些范围并逐步扩长已处理前缀；Windows先设sparse。原生读回不一致即拒绝，不等于物理块/压缩/布局位级相同 |
 | 硬链接 | 归档实际同inode的组，仅重建所选内部成员；单个选中成员nlink=1，不链接外部文件。旧格式仍拒绝硬链接源 |
 
 metadata_profile_verified=true仅表示上表原生配置读回通过；**all_filesystem_metadata_preserved始终false**。ctime由OS管理，特殊mode位、POSIX birthtime恢复、厂商属性和物理布局不在承诺内。属性可能含作者、来源、SID、下载标记等隐私，建议加密；普通明文库的元数据也为明文。
 
+Windows报告 `windows_acl_inheritance_frozen_original_descriptor_archived`：比较归一后的有效ACL/owner/group，不用忽略权限项来消除差异；普通allow/deny配置仅对同类可交换规则规范排序/合并，不把deny移过allow。原始SDDL仍在快照中，继承来源标记及随新父目录变化的行为不恢复。NULL DACL、deny在allow之后、object/callback/条件ACE等无法安全验证的配置拒绝，不用放宽访问作为回退。需要保留整套继承拓扑时还需独立的受控父目录/ACL迁移流程，不能把新位置的普通恢复当成完成。
+
 native要求同平台和 `--permissions`。同平台不代表文件系统能力相同：目标不支持xattr/ADS/稀疏、权限不足、只读或属主不可设置时失败并保留暂存，不默认跳过安全属性或降级成功。portable明确只恢复内容/基础修改时间及可选基础mode，报告元数据损失，不称保真。
+
+macOS空ACL与未取得ACL不能仅凭acl_get_file的ENOENT区分。帮助程序通过同inode的只读描述符、扩展安全能力、fstatx_np成功和FILESEC_ACL属性查询处理；成功查询的缺省ACL归一为零条目ACL，保持访问语义，不声称保留缺省/显式空的内部表示差别。能力/权限/查询错误仍拒绝，不将其归为空ACL。
 
 ### 格式、预算及其他入口
 

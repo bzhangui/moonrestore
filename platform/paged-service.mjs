@@ -500,7 +500,7 @@ export async function engineAction(action, p) {
                     "file_bytes",
                     "relative_paths",
                     "nanosecond_times",
-                    "native_acl_or_xattr",
+                    "protected_effective_windows_acl_or_posix_xattr",
                     "ads_on_windows",
                     "sparse_ranges",
                     "selected_internal_hardlinks",
@@ -518,6 +518,7 @@ export async function engineAction(action, p) {
                     "posix_birthtime_restore",
                     "all_filesystem_metadata",
                     "bit_identical_physical_layout",
+                    "windows_acl_inheritance_topology",
                   ]
                 : [
                     "ACL",
