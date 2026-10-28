@@ -21,7 +21,27 @@ const definitions = {
   windows_vss: {
     consistent_point: false,
     native_required: true,
-    implemented: false,
+    implemented: true,
+    real_environment_verified: false,
+    runtime_activation_required: true,
+  },
+  paged_local: {
+    immutable_write: true,
+    conditional_create: true,
+    filesystem: true,
+    implemented: true,
+    automatic_legacy_migration: false,
+  },
+  postgresql_physical: {
+    implemented: true,
+    native_required: true,
+    pitr_requires_isolated_server: true,
+    production_validated: false,
+  },
+  monitor_receiver: {
+    implemented: true,
+    independent_host_deployed: false,
+    notification_delivery_confirmed: false,
   },
 };
 export function providerCapabilities(name) {
@@ -56,6 +76,10 @@ export function negotiateProvider(request) {
   const result = requireCapabilities(request.provider, request.required);
   if (result.implemented === false)
     throw new Error("Provider is not implemented");
+  if (result.runtime_activation_required)
+    throw new Error(
+      "Provider is implemented but requires explicit native runtime authorization",
+    );
   return { ...result, negotiated: true, arbitrary_code_loaded: false };
 }
 export class OperationError extends Error {

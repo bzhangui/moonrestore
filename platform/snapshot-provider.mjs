@@ -1,4 +1,4 @@
-// Provider lifecycle contract. No privileged VSS implementation is installed.
+// Provider lifecycle contract. Native VSS is explicit, branded and never falls back.
 import fs from "node:fs";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
@@ -6,6 +6,7 @@ import { checked, mkdirPrivate, stateHome } from "./vault.mjs";
 import { core, drill, options, removeOwned } from "./maintenance.mjs";
 import { checkpoint } from "./activity.mjs";
 import { vssPreflight } from "./system.mjs";
+import { isNativeVssProvider, vssHelperAvailable } from "./vss-native.mjs";
 
 export async function backupWithSnapshotProvider(repository, source, provider) {
   repository = checked(repository);
@@ -17,7 +18,7 @@ export async function backupWithSnapshotProvider(repository, source, provider) {
     !["controlled_simulation", "windows_vss"].includes(provider.kind)
   )
     throw new Error("Invalid snapshot provider");
-  if (provider.kind === "windows_vss")
+  if (provider.kind === "windows_vss" && !isNativeVssProvider(provider))
     throw new Error(
       "Native VSS requester is not installed or validated; live-copy fallback refused",
     );
@@ -55,7 +56,9 @@ export async function backupWithSnapshotProvider(repository, source, provider) {
       repository,
       point,
       "--label",
-      "Controlled snapshot-provider rehearsal",
+      provider.kind === "windows_vss"
+        ? "VSS writer-participating copy backup"
+        : "Controlled snapshot-provider rehearsal",
     ]);
     const audit = await core(["audit", repository, backup.snapshot], {
         env: { MOONRESTORE_READ_ONLY: "1" },
@@ -63,11 +66,15 @@ export async function backupWithSnapshotProvider(repository, source, provider) {
       restored = await drill(repository, backup.snapshot);
     result = {
       ok: audit.ok && restored.ok,
-      kind: "snapshot_provider_rehearsal",
+      kind:
+        provider.kind === "windows_vss"
+          ? "vss_snapshot_backup"
+          : "snapshot_provider_rehearsal",
       snapshot: backup.snapshot,
       provider: provider.kind,
       application_consistency_verified: false,
-      real_vss_verified: false,
+      real_vss_verified: provider.kind === "windows_vss",
+      writer_participation_verified: provider.kind === "windows_vss",
       recovery_drill: restored.ok,
       post_restore_readback: restored.post_restore_readback === true,
     };
@@ -77,7 +84,9 @@ export async function backupWithSnapshotProvider(repository, source, provider) {
     // Cancellation and writer/audit failures must not skip exact lease release.
     if (lease)
       try {
-        await provider.release(lease);
+        await provider.release(lease, {
+          completed: !failure && result?.ok === true,
+        });
       } catch {
         const releaseFailure = new Error(
           "Snapshot lease release failed; inspect the provider-owned resource before retrying",
@@ -99,7 +108,7 @@ export async function vssPlan(source) {
     ok: true,
     kind: "vss_readiness_plan",
     readiness,
-    native_requester_available: false,
+    native_requester_available: vssHelperAvailable(),
     shadow_copy_created: false,
     application_consistency_verified: false,
     required_lifecycle: [

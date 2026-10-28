@@ -37,6 +37,7 @@ const files = [
   "bin/moonrestore.mjs",
   "bin/sqlite-export.mjs",
   "bin/sqlite-verify.mjs",
+  "bin/wal-fetch.mjs",
   "platform/adapter.mjs",
   "scripts/console.ps1",
   "scripts/verify-package.mjs",
@@ -61,6 +62,12 @@ const files = [
   "platform/readiness.mjs",
   "platform/state-migration.mjs",
   "platform/snapshot-provider.mjs",
+  "platform/vss-native.mjs",
+  "platform/paged-store.mjs",
+  "platform/paged-operations.mjs",
+  "platform/paged-maintenance.mjs",
+  "platform/postgres-physical.mjs",
+  "platform/monitor-receiver.mjs",
   "platform/contracts.mjs",
   "platform/journal.mjs",
   "platform/operations.mjs",
@@ -82,6 +89,7 @@ const files = [
   "ui/durable.js",
   "ui/readiness.js",
   "_build/js/release/build/cmd/main/main.js",
+  "_build/js/release/build/cmd/storage/storage.js",
   "examples/demo.mjs",
   "examples/scenarios.mjs",
   "LICENSE",
@@ -101,6 +109,8 @@ const files = [
   "docs/RELIABILITY_0_5.md",
   "docs/RELIABILITY_0_6.md",
   "docs/RELIABILITY_0_7.md",
+  "docs/RELIABILITY_0_8.md",
+  "docs/FAULT_MATRIX_0_8.md",
 ];
 if (process.platform !== "win32") files.push("_build/host/rename_noreplace");
 if (embedded)

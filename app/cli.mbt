@@ -1,7 +1,7 @@
 ///|
 fn help() -> String {
   let text =
-    #|MoonRestore 0.7 — verifiable incremental backups
+    #|MoonRestore 0.8 — verifiable incremental backups
     #|Usage: node bin/moonrestore.mjs <command> ...
     #|  init <repository>                       Create a NEW repository
     #|  backup <repository> <source>             Backup a directory tree
@@ -15,6 +15,17 @@ fn help() -> String {
     #|  plan-schedule-preview <UUID> | plan-schedule-install <UUID> --confirm EXACT_TASK
     #|  readiness | watchdog-check [--notify]  Local observations only, no implicit network
     #|  readiness-send HTTPS_ENDPOINT [--allow-remote]  Redacted counts, not paths
+    #|  monitor-init NEW_DIR --source UUID [--max-age SECONDS]
+    #|  monitor-serve DIR [--host IP --port N --tls-key PRIVATE --tls-cert CERT --allow-remote]
+    #|  monitor-send URL/heartbeat --source UUID [--allow-remote] | monitor-status DIR
+    #|  os-task-status EXACT_TASK | os-task-disable EXACT_TASK --confirm EXACT_TASK
+    #|  os-task-remove EXACT_TASK --confirm EXACT_TASK  Only owned non-running tasks
+    #|  paged-init NEW_REPO [--encrypted]        Explicit format 4, old formats unchanged
+    #|  paged-backup REPO SOURCE [--exclude PREFIX --label TEXT] | paged-verify REPO ID
+    #|  paged-restore REPO ID NEW_TARGET --confirm NEW_TARGET [--permissions]
+    #|  paged-migrate OLD_REPO OLD_ID NEW_REPO --confirm NEW_REPO [--encrypted]
+    #|  paged-gc REPO [--batch N --confirm PREVIEW_HASH]  Quarantine only, no snapshot pruning
+    #|  paged-recover REPO --confirm REPOSITORY_UUID | paged-purge REPO BATCH [--confirm BATCH]
     #|  state-status | state-migrate-preview OLD_STATE NEW_STATE
     #|  state-migrate OLD_STATE NEW_STATE --confirm PREVIEW_HASH  No keys or overwrite
     #|  protection-preview <repo> <PRIVATE-JSON> | protection-apply <repo> <PRIVATE-JSON> --confirm HASH
@@ -27,6 +38,10 @@ fn help() -> String {
     #|  rescue-restore <kit> <TRUSTED-recipe-hash> <repo> <NEW-target>
     #|  support-report [--output NEW-private-file]  Allowlisted counts/capabilities only
     #|  postgres-backup <repo> --database DB --user USER --pg-dump ABS --pg-restore ABS
+    #|  postgres-physical-backup PAGED_REPO --bin ABS_PG_BIN --user USER [--host HOST --port N]
+    #|  wal-archive-init NEW_WAL_DIR | wal-archive-put WAL_DIR CANONICAL_NAME SOURCE_FILE
+    #|  pitr-prepare PAGED_REPO ID NEW_TARGET --confirm NEW_TARGET --bin ABS --wal DIR --time UTC --trust-source
+    #|  pitr-drill ... --allow-isolated-server --user USER  Unix only; never production
     #|  archive-export <repo> <NEW-archive> [--no-compress]
     #|  archive-import <archive> <external-checksum> <NEW-repo>
     #|  key-migrate <source-repo> <NEW-encrypted-repo>  Private destination password env
@@ -55,9 +70,12 @@ fn help() -> String {
     #|  index-build <repo> | index-search <repo> <query> [--offset N]
     #|  sqlite-backup <repo> <database> [--label text --timeout ms]
     #|  sqlite-recover <repo> <id> <NEW-dir> --confirm <NEW-dir> [--checks PRIVATE_JSON]
-    #|  vss-plan <source> | provider-rehearsal <repo>  No native VSS
+    #|  vss-plan <source> | provider-rehearsal <repo>  Preflight / synthetic rehearsal
+    #|  vss-backup REPO SOURCE --allow-native-vss  Windows SDK helper, existing admin session
     #|  s3-push <repo> <id> --endpoint URL --bucket NAME [--allow-remote]
     #|  s3-restore <receipt-key> <checksum> <NEW-repo> --endpoint URL --bucket NAME
+    #|  s3-drill RECEIPT_KEY SHA NEW_REPO --endpoint URL --bucket NAME [--version PIN]
+    #|  remote-audit-cycle RECEIPT_KEY SHA --cycle new|UUID --endpoint URL --bucket NAME --version PIN [--retry --recover]
     #|  remote-audit RECEIPT_KEY SHA --endpoint URL --bucket NAME --version PIN [--offset N --batch N --remaining-days N --allow-remote]
     #|  remote-writer-policy BUCKET PREFIX     Reviewable IAM template only, not applied
     #|    See docs/REMOTE.md for credentials, versions and explicit retention consent
@@ -108,7 +126,7 @@ pub fn run(args : Array[String]) -> Unit raise {
     return
   }
   if args[0] == "version" {
-    println("MoonRestore 0.7.0")
+    println("MoonRestore 0.8.0")
     return
   }
   if args[0] == "operation-transition" {

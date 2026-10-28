@@ -5,7 +5,11 @@ import path from "node:path";
 import http from "node:http";
 import { fixture, put, call, tree, sha } from "./helpers.mjs";
 import { S3Backend, signS3Request } from "../platform/s3.mjs";
-import { pushSnapshot, restoreRemote } from "../platform/remote.mjs";
+import {
+  pushSnapshot,
+  restoreRemote,
+  remoteDrill,
+} from "../platform/remote.mjs";
 
 // Published AWS documentation example, not account credentials.
 test("SigV4 matches the independently published AWS GET/range example", () => {
@@ -207,6 +211,16 @@ test("encrypted S3 controlled copy restores a fully audited independent reposito
       const output = path.join(f.base, "output");
       call(["restore", dest, b.snapshot, output]);
       assert.deepEqual(tree(output), tree(f.source));
+      const fullDrill = await remoteDrill(
+        backend,
+        result.receipt_key,
+        result.receipt_checksum,
+        path.join(f.base, "drill-copy"),
+        { version: result.receipt_version },
+      );
+      assert.equal(fullDrill.plaintext_restored_and_read_back, true);
+      assert.ok(fullDrill.total_recovery_ms > 0);
+      assert.equal(fullDrill.real_cloud_provider_verified, false);
       const denied = path.join(f.base, "wrong-key");
       const originalPassword = process.env.MOONRESTORE_PASSWORD;
       process.env.MOONRESTORE_PASSWORD = "incorrect-controlled-password";

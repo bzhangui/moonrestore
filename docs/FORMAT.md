@@ -1,6 +1,21 @@
 # 仓库格式与兼容
 
-## 0.7.0 兼容范围
+## 0.8.0：显式 format 4
+
+旧format1/2/3不变，只有 `paged-init` 在不存在的新目录创建format4。迁移原仓库只读，命令、边界和回退见 [0.8指南](RELIABILITY_0_8.md)。新格式尚未接入旧工作台/计划/S3/运输归档。以下的0.7及更早章节是旧格式规范，不约束format4。
+
+- 目录：`moonrestore` 标识、`repository-id` UUID、可选 `encryption.json`、`pages/`、`packs/`、`snapshots/`、`tmp/`、`trash/`。标识为 `moonrestore-paged-repository-v4\n` 或 `moonrestore-paged-encrypted-v4\n`。
+- 明文逻辑ID为SHA-256小写hex。加密物理文件名用原信封的分类型HMAC映射，AES-GCM绑定仓库密钥配置、类型和逻辑ID；包摘要是解压后原始包，不是压缩字节。顶层逻辑根ID应另存可信渠道。
+- 根JSON：`format:4, repository:UUID, created:ISO, label:String, pages:Number, last_page:SHA|"", entries:Number, chunks:Number, bytes:十进制String, excludes:String[]`。空树零计数/空末页。最多1百万条目/1百万页/32百万引用/1TiB字节，标签200字符，排除最多64项/8KiB。
+- 页JSON：`format:4, sequence:Number, previous:SHA|"", records:Record[]`，最多128记录/256KiB；序号0前序空，否则有效摘要。根指最后一页，先倒向校验全部链并写私有磁盘索引，再正向按文件状态机验证。不能靠单页通过冒称整快照通过。
+- 记录：`kind,path,id,size,pack,offset`；size为十进制字符串，file/dir还需`mtime_ms`字符串及0..511的基础mode。dir大小0，file先声明长度；chunk只属于当前文件并指pack/offset/块ID，end给出完整文件SHA和相同长度。父目录必须已出现，路径合法、大小写唯一。单文件≤64GiB，单块1..1MiB；边界/总计由MoonBit验证。
+- 原始包：ASCII `MRPK4\n`（6字节），随后每块为LE uint32长度+32字节块SHA+原始内容；原始包≤8MiB。物理编码ASCII `MRP4`+压缩标记u8（0或1）+LE uint32原始长度+原始内容或zlib deflate内容；解压输出硬上限8MiB，核对逻辑包SHA、块位置/长度/ID/摘要。加密额外使用现有64字节信封开销。
+- 所有可见对象条件创建并读回，根最后提交。writer互斥；恢复先完整预校验，排他新目录写出并独立读回后提交。SQLite仅私有可重建缓存，单个一次性事务避免逐条fsync，关闭即回滚/清除；不会降低仓库对象/根本身的同步门禁，重启不复用它。
+- GC完整审计所有根，隔离无引用页/包；清单SHA为批次ID，pending阻断写入，7天后独立确认清理，未完成的自身两链接移动精确回滚。不修复被篡改根，不删快照，不永久清理普通暂存孤儿。
+
+这些是实现的拒绝预算，不是上限规模性能/断电保证；JSON字节编码和记录顺序属于根摘要，重排并不保留原ID。代码入口 `core/paged.mbt`、`cmd/storage`、`platform/paged-*.mjs`，互操作向量由 `tests/paged.test.mjs` 的实际创建/恢复验证。
+
+## 0.7.0 及旧格式兼容范围（历史）
 
 仍使用 live 格式1/2/3及其原有预算，不改分块/ID/快照编码，不原地迁移。新增部分文件检查点是**私有操作日志**，认证绑定仓库身份/操作/相对路径和分块引用；完整对象先提交，检查点每1024个完整块记录，最后提交完整清单。加密源的记录同样认证加密，物理日志文件名不暴露明文路径。续作要重读源前缀并验证已有对象，不能据日志推断源文件未变。
 
@@ -16,7 +31,7 @@
 
 默认恢复修改时间；POSIX 权限必须显式开启，不包含 setuid/setgid、所有者、Windows ACL、ADS 或 xattrs。基础 `Snapshot` 构造字段保持兼容；库作者需成对使用 `encode_with_metadata` / `decode_metadata` 保留扩展。0.2 可忽略新属性并恢复内容，不能恢复这些属性。实际旧/新运行包双向内容恢复与分块引用一致性有独立测试。
 
-维护层累计清单模型预算 64 MiB，超出拒绝；不是无限规模/恒定内存。新版本没有启用对象压缩或创建 VSS 快照。
+旧格式维护层累计清单模型预算 64 MiB，超出拒绝；不是无限规模/恒定内存。旧格式没有启用对象压缩；VSS属于0.8显式应用适配，不改变这些旧仓库的存储编码。
 
 ## 0.2.0 新增的存储/数据 profile
 

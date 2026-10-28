@@ -11,6 +11,7 @@ import {
   scheduleStatus,
 } from "../platform/plan-scheduler.mjs";
 import { utf8JsonScript } from "../platform/system.mjs";
+import { TaskController } from "../platform/os-schedule.mjs";
 if (
   process.platform !== "win32" ||
   process.argv.length !== 3 ||
@@ -36,7 +37,7 @@ function powershell(script, input) {
     {
       input: JSON.stringify(input),
       encoding: "utf8",
-      timeout: 100000,
+      timeout: 60000,
       windowsHide: true,
       shell: false,
     },
@@ -104,11 +105,30 @@ try {
   };
 } finally {
   try {
-    if (attempted)
-      powershell(
-        "$ErrorActionPreference='Stop';$v=[Console]::In.ReadToEnd()|ConvertFrom-Json;$s=New-Object -ComObject 'Schedule.Service';$s.Connect();$f=$s.GetFolder('\\');try{$t=$f.GetTask($v.task)}catch{if($_.Exception.HResult -eq -2147024894){exit 0}else{throw}};$a=$t.Definition.Actions.Item(1);if($t.Definition.RegistrationInfo.Description -ne 'MoonRestore explicit current-user plan' -or $t.Definition.Actions.Count -ne 1 -or $a.Path -ne $v.node -or -not $a.Arguments.Contains($v.home)){throw 'Not the owned task'};$t.Stop(0);$f.DeleteTask($v.task,0)",
-        { task: preview.task, node: process.execPath, home },
-      );
+    const controller = new TaskController();
+    // install records an intent BEFORE making a registration RPC. If pre-query
+    // failed and no intent exists, this rehearsal never attempted a mutation.
+    if (attempted && fs.existsSync(controller.file(preview.task))) {
+      const deadline = Date.now() + 30000;
+      let status = controller.status(preview.task);
+      while (
+        status.state === "owned" &&
+        status.running &&
+        Date.now() < deadline
+      ) {
+        await new Promise((resolve) => setTimeout(resolve, 500));
+        status = controller.status(preview.task);
+      }
+      if (
+        status.state === "unknown" ||
+        status.state === "conflict" ||
+        status.running
+      )
+        throw new Error(
+          "Owned task cleanup not confirmed; no stop/delete guessed",
+        );
+      controller.change(preview.task, preview.task, "remove");
+    }
     cleanupConfirmed = true;
     removeOwned(root, parent, "moonrestore-plan-qa-");
   } finally {

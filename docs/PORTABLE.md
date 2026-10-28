@@ -1,6 +1,6 @@
 # MoonRestore 运行包
 
-具体版本以 manifest.json 为准。当前 0.6.0 为源码/本地包开发版，Mooncakes 正式版本仍为 0.5.0；本地运行包不等于公开 Release。
+具体版本以 manifest.json 为准。当前 0.8.0 为源码/本地包开发版，Mooncakes 正式版本仍为 0.5.0；本地运行包不等于公开 Release。本轮没有公开运行包或注册表发布授权。
 
 普通便携包需外部 Node.js ≥22.16.0。若包含 `MoonRestore.exe` 和 `runtime/node.exe`，则为内置运行时的 Windows x64 桌面包，可双击 EXE，无需全局 Node/MoonBit，仍需 Windows .NET Framework 4.x。安装与回退见 `docs/DESKTOP.md`。两种包均无需运行 npm install，EXE 尚未代码签名。
 
@@ -14,7 +14,7 @@ node examples/scenarios.mjs
 
 正常使用：先 `init` 创建不存在的仓库，`backup` 备份源文件夹，`verify` 校验，`restore` 恢复到不存在的新目录。完整命令和维护注意事项见 `docs/OPERATIONS.md` 与 `SECURITY.md`。
 
-0.4 新入口：emergency-preview/emergency-restore、rebuild-copy、recovery-checklist、scrub/health-status、index-build/index-search、sqlite-backup，以及显式授权的 s3-push/s3-restore。见 docs/RECOVERY_0_4.md、docs/APPLICATIONS.md、docs/REMOTE.md。部分恢复明确返回不完整；VSS 只有预检/合成生命周期，未提供真实请求器。S3 仅受控服务验证，非回环联网和保留期须分别显式授权。
+0.8 新入口及旧格式兼容见 docs/RELIABILITY_0_8.md；加密paged备份/恢复已纳入包冒烟。VSS helper需源码单独编译，通用便携包不含helper或管理员能力；PostgreSQL工具需用户另行提供。S3仅旧加密format2/3，受控服务验证不是真云；非回环联网和保留期须分别显式授权。旧应急/部分恢复见 docs/RECOVERY_0_4.md。
 
 此包只适用于其 manifest.json 所列的平台与架构，不要将 Linux/macOS 辅助程序复制到其他平台运行。`manifest.json` 记录包内文件的 SHA-256，源码项目中的 `scripts/verify-package.mjs` 可复核。
 

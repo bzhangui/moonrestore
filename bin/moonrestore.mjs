@@ -31,6 +31,12 @@ import { readinessCommand } from "../platform/readiness.mjs";
 import { stateCommand } from "../platform/state-migration.mjs";
 import { remoteAuditCommand } from "../platform/remote-audit.mjs";
 import { sqliteRecoveryCommand } from "../platform/sqlite-recovery.mjs";
+import { taskControlCommand } from "../platform/os-schedule.mjs";
+import { pagedCommand } from "../platform/paged-operations.mjs";
+import { pagedMaintenanceCommand } from "../platform/paged-maintenance.mjs";
+import { nativeVssCommand } from "../platform/vss-native.mjs";
+import { physicalCommand } from "../platform/postgres-physical.mjs";
+import { monitorCommand } from "../platform/monitor-receiver.mjs";
 if (process.env.MOONRESTORE_INTERNAL !== "1" && process.argv[2] === "--home") {
   if (!process.argv[3])
     throw new Error("--home requires a private state directory");
@@ -44,6 +50,12 @@ if (process.env.MOONRESTORE_INTERNAL !== "1") {
       async () =>
         (await operationCommand(args)) ??
         (await readinessCommand(args)) ??
+        taskControlCommand(args) ??
+        (await pagedCommand(args)) ??
+        (await pagedMaintenanceCommand(args)) ??
+        (await nativeVssCommand(args)) ??
+        (await physicalCommand(args)) ??
+        (await monitorCommand(args)) ??
         (await sqliteRecoveryCommand(args)) ??
         stateCommand(args) ??
         (await remoteAuditCommand(args)) ??

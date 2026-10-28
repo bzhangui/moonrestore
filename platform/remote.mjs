@@ -9,6 +9,7 @@ import {
   fingerprint,
   options,
   saveReport,
+  drill,
 } from "./maintenance.mjs";
 import { checked, readPrivate, writePrivate, unseal } from "./vault.mjs";
 import { publishDirectory } from "./adapter.mjs";
@@ -227,8 +228,34 @@ export async function restoreRemote(
   };
   return { ...report, destination, files: saveReport(report) };
 }
+export async function remoteDrill(
+  backend,
+  receiptKey,
+  checksum,
+  destination,
+  settings = {},
+) {
+  const started = performance.now(),
+    copy = await restoreRemote(
+      backend,
+      receiptKey,
+      checksum,
+      destination,
+      settings,
+    ),
+    restored = await drill(destination, copy.snapshot);
+  return {
+    ok: restored.ok,
+    kind: "s3_end_to_end_recovery_drill",
+    download_and_full_audit: copy.full_snapshot_audit,
+    plaintext_restored_and_read_back: restored.post_restore_readback === true,
+    total_recovery_ms: Math.ceil(performance.now() - started),
+    real_cloud_provider_verified: false,
+    physical_host_independence_verified: false,
+  };
+}
 export async function remoteCommand(args) {
-  if (!["s3-push", "s3-restore"].includes(args[0])) return null;
+  if (!["s3-push", "s3-restore", "s3-drill"].includes(args[0])) return null;
   const { values: v, positionals: p } = options(
     args.slice(1),
     [
@@ -248,7 +275,7 @@ export async function remoteCommand(args) {
       "S3 command requires explicit endpoint, bucket and snapshot/receipt arguments",
     );
   if (
-    (args[0] === "s3-restore" &&
+    (args[0] !== "s3-push" &&
       ["prefix", "retention-days", "allow-retention"].some((k) => k in v)) ||
     (args[0] === "s3-push" && "version" in v)
   )
@@ -267,5 +294,7 @@ export async function remoteCommand(args) {
   });
   return args[0] === "s3-push"
     ? pushSnapshot(p[0], p[1], backend, { prefix: v.prefix })
-    : restoreRemote(backend, ...p, { version: v.version });
+    : args[0] === "s3-drill"
+      ? remoteDrill(backend, ...p, { version: v.version })
+      : restoreRemote(backend, ...p, { version: v.version });
 }

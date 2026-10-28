@@ -215,6 +215,33 @@ try {
     "controlled portable backup",
   );
   const support = run(["support-report"]);
+  const paged = path.join(root, "paged"),
+    pagedRestored = path.join(root, "paged-restored");
+  run(["paged-init", paged, "--encrypted"]);
+  const pagedBackup = run(["paged-backup", paged, source]);
+  assert.equal(
+    run(["paged-verify", paged, pagedBackup.snapshot]).content_verified,
+    true,
+  );
+  const oldPagedState = env.MOONRESTORE_HOME;
+  env.MOONRESTORE_HOME = path.join(root, "fresh-paged-state");
+  assert.equal(
+    run([
+      "paged-restore",
+      paged,
+      pagedBackup.snapshot,
+      pagedRestored,
+      "--confirm",
+      pagedRestored,
+    ]).independent_disk_readback,
+    true,
+  );
+  env.MOONRESTORE_HOME = oldPagedState;
+  assert.equal(
+    fs.readFileSync(path.join(pagedRestored, "sample.txt"), "utf8"),
+    "controlled portable backup",
+  );
+  assert.equal(run(["paged-gc", paged]).candidates, 0);
   assert.equal(run(["readiness"]).kind, "recovery_readiness");
   assert.equal(run(["state-status"]).automatic_migration, false);
   assert.equal(
@@ -268,6 +295,7 @@ try {
       allowlisted_diagnostics: true,
       readiness_and_safe_state_migration: true,
       sqlite_recovery_reopened: true,
+      paged_encrypted_backup_and_restore: true,
     }),
   );
 } finally {
