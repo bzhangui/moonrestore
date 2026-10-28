@@ -49,7 +49,7 @@ node bin/moonrestore.mjs restore-resumable NEW_REPO SNAPSHOT NEW_TARGET --permis
 | 时间 | atime/mtime十进制纳秒归档；Windows原生100ns精度，含creation time恢复；POSIX原生utimensat读回。探测可能改变atime，之后重设并stat核对 |
 | Windows | 原始DACL/owner/group的SDDL归档；恢复为受保护显式ACL，保持有效ACE顺序/权限/属主并阻止新父目录追加规则，不保留原继承拓扑。安全属性、每文件≤16个ADS/总64KiB；源EFS、压缩、重解析点拒绝。不启用特权，不处理SACL/完整性标签或全部NTFS特性 |
 | Linux/macOS | uid/gid、基础mode、二进制xattr；macOS另含extended ACL。有权应用并读回才成功，不提权。特殊mode位不归档；POSIX birthtime只记录不恢复 |
-| 稀疏 | 捕获系统报告的分配范围，只写这些范围并逐步扩长已处理前缀；Windows先设sparse。原生读回不一致即拒绝，不等于物理块/压缩/布局位级相同 |
+| 稀疏 | 捕获系统报告的分配范围，只写这些范围并逐步扩长已处理前缀；Windows先设sparse。原生读回不一致即拒绝；SEEK_DATA/HOLE可保守报告整个文件为数据（本轮APFS有此行为），此时不证明物理洞保留，不等于物理块/压缩/布局位级相同 |
 | 硬链接 | 归档实际同inode的组，仅重建所选内部成员；单个选中成员nlink=1，不链接外部文件。旧格式仍拒绝硬链接源 |
 
 metadata_profile_verified=true仅表示上表原生配置读回通过；**all_filesystem_metadata_preserved始终false**。ctime由OS管理，特殊mode位、POSIX birthtime恢复、厂商属性和物理布局不在承诺内。属性可能含作者、来源、SID、下载标记等隐私，建议加密；普通明文库的元数据也为明文。
