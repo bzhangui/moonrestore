@@ -114,24 +114,31 @@ test(
         "-c",
         "INSERT INTO synthetic_values VALUES(3,'after-target');",
       ]);
-      await run("psql", [
-        "-X",
-        "-v",
-        "ON_ERROR_STOP=1",
-        "-c",
-        "SELECT pg_switch_wal(); CHECKPOINT;",
-      ]);
-      // Archive every completed segment, not the active/incomplete segment.
-      const active = await run("psql", [
+      const completedSegment = await run("psql", [
         "-X",
         "-A",
         "-t",
         "-c",
         "SELECT pg_walfile_name(pg_current_wal_lsn())",
       ]);
+      await run("psql", [
+        "-X",
+        "-v",
+        "ON_ERROR_STOP=1",
+        "-c",
+        "SELECT pg_switch_wal();",
+      ]);
+      // Archive before a checkpoint can recycle history. At an exact boundary,
+      // pg_walfile_name(current_lsn) returns the previous segment, not the active
+      // one. Pin the completed transaction's segment BEFORE switching instead.
       for (const name of fs.readdirSync(path.join(source, "pg_wal")))
-        if (/^[A-F0-9]{24}$/.test(name) && name !== active)
+        if (/^[A-F0-9]{24}$/.test(name) && name <= completedSegment)
           archiveWal(wal, name, path.join(source, "pg_wal", name));
+      assert.equal(
+        fs.existsSync(path.join(wal, completedSegment + ".json")),
+        true,
+        "The post-target commit segment must be archived before recovery",
+      );
       const target = path.join(f.base, "isolated");
       phase = "isolated-recovery";
       const result = await pitrDrill(repo, base.snapshot, target, {
