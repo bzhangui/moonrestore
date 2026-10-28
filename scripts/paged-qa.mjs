@@ -69,6 +69,12 @@ try {
   assert.ok(b.pages > 10);
   assert.ok(fs.readdirSync(path.join(repo, "packs")).length > 4);
   start = performance.now();
+  const repeat = await backupPaged(repo, source),
+    incrementalMs = Math.ceil(performance.now() - start);
+  assert.ok(repeat.history_audit.cached_roots > 0);
+  assert.equal(repeat.stored_pack_bytes, "0");
+  assert.equal(repeat.history_fully_healthy, false);
+  start = performance.now();
   await verifyPaged(repo, b.snapshot);
   const verifyMs = Math.ceil(performance.now() - start);
   start = performance.now();
@@ -85,6 +91,9 @@ try {
       pages: b.pages,
       packs: fs.readdirSync(path.join(repo, "packs")).length,
       backup_ms: backupMs,
+      repeat_backup_ms: incrementalMs,
+      repeat_stored_pack_bytes: repeat.stored_pack_bytes,
+      cached_history_roots: repeat.history_audit.cached_roots,
       verify_ms: verifyMs,
       restore_ms: restoreMs,
       process_peak_rss_kib: process.resourceUsage().maxRSS,

@@ -242,6 +242,52 @@ try {
     "controlled portable backup",
   );
   assert.equal(run(["paged-gc", paged]).candidates, 0);
+  assert.equal(run(["paged-capabilities", paged]).protocol, 1);
+  const shared = run(["backup", paged, source]),
+    chosen = path.join(root, "paged-chosen"),
+    chosenPreview = run([
+      "paged-selected-preview",
+      paged,
+      shared.snapshot,
+      chosen,
+    ]);
+  assert.equal(
+    run([
+      "paged-selected-restore",
+      paged,
+      shared.snapshot,
+      chosen,
+      "--confirm",
+      chosenPreview.confirmation,
+    ]).post_restore_readback,
+    true,
+  );
+  const pagedKit = path.join(root, "paged-kit"),
+    pagedRecipe = run([
+      "rescue-kit",
+      paged,
+      shared.snapshot,
+      pagedKit,
+      "--bundle",
+      bundle,
+      "--bundle-sha256",
+      manifestHash,
+    ]);
+  assert.equal(
+    run([
+      "rescue-restore",
+      pagedKit,
+      pagedRecipe.recipe_sha256,
+      paged,
+      path.join(root, "paged-offline"),
+    ]).post_restore_readback,
+    true,
+  );
+  assert.equal(
+    run(["paged-replica", paged, path.join(root, "paged-copy")])
+      .full_snapshot_audit,
+    true,
+  );
   assert.equal(run(["readiness"]).kind, "recovery_readiness");
   assert.equal(run(["state-status"]).automatic_migration, false);
   assert.equal(

@@ -12,6 +12,7 @@ import {
 } from "../platform/plan-scheduler.mjs";
 import { utf8JsonScript } from "../platform/system.mjs";
 import { TaskController } from "../platform/os-schedule.mjs";
+import { runEngine } from "../platform/engine-client.mjs";
 if (
   process.platform !== "win32" ||
   process.argv.length !== 3 ||
@@ -56,7 +57,7 @@ try {
     path.join(source, "synthetic.txt"),
     "owned current-user plan rehearsal",
   );
-  await core(["init", repository]);
+  await runEngine("init", { repository, encrypted: false });
   const p = savePlan({
     name: "仅合成资料的计划任务验收",
     type: "files",
@@ -97,6 +98,7 @@ try {
       fs.readFileSync(new URL("../package.json", import.meta.url)),
     ).version,
     kind: "unified_plan_windows_os_rehearsal",
+    repository_format: 4,
     ok: true,
     registered_started_and_verified: true,
     current_user_logged_in_only: true,

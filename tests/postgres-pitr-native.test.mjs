@@ -14,6 +14,7 @@ import {
   pitrDrill,
 } from "../platform/postgres-physical.mjs";
 import { postgresEnvironment } from "../platform/postgresql.mjs";
+import { bindWalArchive, walHealth } from "../platform/wal-health.mjs";
 async function port() {
   const s = net.createServer();
   await new Promise((resolve) => s.listen(0, "127.0.0.1", resolve));
@@ -158,6 +159,53 @@ test(
         false,
       );
       assert.equal(result.table_row_checks_passed, 1);
+      const physical = path.join(target, "physical.json"),
+        metadata = JSON.parse(fs.readFileSync(physical)),
+        segmentBytes = Number(
+          await run("psql", [
+            "-X",
+            "-A",
+            "-t",
+            "-c",
+            "SELECT pg_size_bytes(current_setting('wal_segment_size'))",
+          ]),
+        );
+      bindWalArchive(wal, {
+        systemIdentifier: metadata.system_identifier,
+        segmentBytes,
+        confirmation: wal,
+      });
+      const range = metadata.wal_ranges[0],
+        coverage = {
+          baseMetadata: physical,
+          timeline: range.Timeline,
+          expectedEndLsn: range["End-LSN"],
+        };
+      assert.equal(
+        walHealth(wal, coverage).ok,
+        true,
+        "Actual archived WAL must cover physical base range",
+      );
+      const [hi, lo] = range["Start-LSN"].split("/"),
+        lsn = (BigInt("0x" + hi) << 32n) + BigInt("0x" + lo),
+        segment = lsn / BigInt(segmentBytes),
+        perLog = 4294967296n / BigInt(segmentBytes),
+        name =
+          range.Timeline.toString(16).toUpperCase().padStart(8, "0") +
+          (segment / perLog).toString(16).toUpperCase().padStart(8, "0") +
+          (segment % perLog).toString(16).toUpperCase().padStart(8, "0"),
+        receipt = path.join(wal, name + ".json"),
+        saved = fs.readFileSync(receipt);
+      fs.writeFileSync(receipt, "{}");
+      try {
+        assert.equal(
+          walHealth(wal, coverage).ok,
+          false,
+          "Bad WAL receipt must not pass coverage",
+        );
+      } finally {
+        fs.writeFileSync(receipt, saved);
+      }
       // Source cluster was not modified by the recovery workflow.
       assert.equal(
         await run("psql", [
