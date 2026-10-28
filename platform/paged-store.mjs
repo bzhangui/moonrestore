@@ -492,6 +492,10 @@ export class PagedIndex {
     this.db.exec(
       "PRAGMA journal_mode=DELETE; PRAGMA synchronous=FULL; PRAGMA cache_size=-2048; PRAGMA temp_store=FILE; PRAGMA max_page_count=2097152; CREATE TABLE pages(seq INTEGER PRIMARY KEY,payload BLOB NOT NULL); CREATE TABLE paths(k TEXT PRIMARY KEY,kind TEXT NOT NULL); CREATE TABLE objects(k TEXT PRIMARY KEY,payload BLOB NOT NULL); CREATE TABLE source(seq INTEGER PRIMARY KEY,payload BLOB NOT NULL); CREATE TABLE live(k TEXT PRIMARY KEY);",
     );
+    // One private disposable transaction avoids a durable fsync for every cache
+    // row. Nothing ever reuses this index after restart; close rolls it back.
+    // Repository objects and roots retain their separate durability barriers.
+    this.db.exec("BEGIN IMMEDIATE");
   }
   key(kind, value) {
     return storageId(
