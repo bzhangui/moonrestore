@@ -6,6 +6,8 @@
 
 Apache-2.0/NOTICE和全部第三方许可保持，无新增npm运行依赖。恢复原生配置读回不等于全部文件系统属性、所有系统/文件系统组合或真实外部试点；ctime、POSIX birthtime恢复、特殊mode位、厂商扩展、物理断电/真实云/跨主机/VSS生产证据仍有明确缺口。
 
+最终01877e7的 [CI 40661377695](https://github.com/bzhangui/moonrestore/actions/runs/40661377695)四作业全成功，三系统各214项、核心38用例×四目标及508/544覆盖通过，独立PG16两专项各1通过/0跳过，实际便携包均验证但不发布。平台跳过、ACL拓扑与APFS报告范围限制详见QUALITY_REPORT/PUBLICATION，不沿用历史绿灯。现有Mooncakes0.5.0未撤回，本轮源码0.10.0未发布。
+
 ## 0.9.0 当前增量（2026-10-28）
 
 当前源码0.9.0；以下0.8及更早章节保留历史记录。0.9见 [操作指南](RELIABILITY_0_9.md)、[实施范围](UPGRADE_0_9.md)、[测试报告](QUALITY_REPORT.md)，精确推送/CI见PUBLICATION。
