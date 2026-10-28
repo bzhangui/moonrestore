@@ -12,7 +12,26 @@ import {
   validatePhysicalTools,
   pitrDrill,
   physicalClient,
+  postgresRecoveryTime,
 } from "../platform/postgres-physical.mjs";
+
+test("recovery config uses a numeric UTC offset, preserves microseconds and rejects invalid calendar dates", () => {
+  assert.equal(
+    postgresRecoveryTime("2026-10-28T00:10:40.123456Z"),
+    "2026-10-28 00:10:40.123456+00",
+  );
+  assert.equal(
+    postgresRecoveryTime("2026-10-28T00:10:40Z"),
+    "2026-10-28 00:10:40+00",
+  );
+  for (const value of [
+    "2026-02-30T00:00:00Z",
+    "2026-10-28T25:00:00Z",
+    "2026-10-28 00:00:00 UTC",
+    "2026-10-28T00:00:00Z\nport=1234",
+  ])
+    assert.throws(() => postgresRecoveryTime(value), /UTC/);
+});
 import { TaskManager } from "../platform/activity.mjs";
 
 test("application cancellation does not suppress bounded owned-server cleanup", async () => {

@@ -410,6 +410,18 @@ function configLiteral(value) {
   if (/[\r\n\0]/.test(value)) throw new Error("Unsafe PostgreSQL setting");
   return "'" + value.replaceAll("\\", "\\\\").replaceAll("'", "''") + "'";
 }
+export function postgresRecoveryTime(value) {
+  if (
+    typeof value !== "string" ||
+    !/^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d(?:\.\d{1,6})?Z$/.test(value) ||
+    !Number.isFinite(Date.parse(value)) ||
+    new Date(value).toISOString().slice(0, 19) !== value.slice(0, 19)
+  )
+    throw new Error("Valid UTC recovery timestamp required");
+  // Recovery GUCs are checked before timezone_abbreviations is initialized.
+  // A numeric UTC offset is independent of that ordering; preserve microseconds.
+  return value.slice(0, -1).replace("T", " ") + "+00";
+}
 export async function preparePitr(
   repository,
   snapshot,
@@ -433,6 +445,7 @@ export async function preparePitr(
     throw new Error(
       "PITR isolated server currently requires Unix; no restore attempted",
     );
+  const targetTime = postgresRecoveryTime(recoveryTime);
   const tools = physicalTools(bin),
     major = await validatePhysicalTools(tools),
     archive = walRoot(walArchive);
@@ -472,7 +485,7 @@ export async function preparePitr(
     "dynamic_library_path = '$libdir'",
     "max_logical_replication_workers = 0",
     "restore_command = " + configLiteral(restore),
-    "recovery_target_time = " + configLiteral(recoveryTime),
+    "recovery_target_time = " + configLiteral(targetTime),
     "recovery_target_timeline = 'current'",
     "recovery_target_action = 'pause'",
     "hot_standby = on",
