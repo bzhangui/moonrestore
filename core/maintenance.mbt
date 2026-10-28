@@ -2,7 +2,10 @@
 pub(all) struct RetentionRecord {
   id : String
   created : String
-}
+} derive(FromJson)
+
+///|
+pub extend RetentionRecord with @json.FromJson::{from_json}
 
 ///|
 fn decimal(text : String) -> Int32 raise BackupError {

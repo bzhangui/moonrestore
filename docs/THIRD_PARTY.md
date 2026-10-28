@@ -1,5 +1,7 @@
 # 来源、复用与许可证
 
+0.9新增持久HMAC/加密提示、认证日志、SQLite游标、分页远端、保留/重建、WAL诊断和告警适配均为本项目代码，使用已有Node标准crypto/SQLite/HTTP接口，无新增npm运行依赖。WAL连续性/历史文件依据 [PostgreSQL16连续归档文档](https://www.postgresql.org/docs/16/continuous-archiving.html)，任务身份依据 [Microsoft任务安全上下文](https://learn.microsoft.com/en-us/windows/win32/taskschd/security-contexts-for-running-tasks)；仅参考协议/系统文档，不复制其实现，不把参考当认证。
+
 | 组件 | 来源与版本 | 使用方式 | 许可 |
 |---|---|---|---|
 | MoonBit core | 编译器配套 core，0.2.0 验证基线 moonc 0.10.15 | JSON、字节、UTF-8、容器等标准库 | Apache-2.0 |

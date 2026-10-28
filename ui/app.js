@@ -361,6 +361,7 @@ $("init").onclick = () => {
     action(async () =>
       show(
         await api("init", {
+          format: Number($("new-repo-format").value),
           repository: j.repository,
           confirmation: j.repository,
         }),

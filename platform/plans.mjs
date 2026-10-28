@@ -25,6 +25,8 @@ import { sqliteBackup } from "./applications.mjs";
 import { postgresBackup } from "./postgresql.mjs";
 import { S3Backend, validateS3Destination } from "./s3.mjs";
 import { pushSnapshot } from "./remote.mjs";
+import { repositoryKind } from "./repository-kind.mjs";
+import { runEngine } from "./engine-client.mjs";
 const planFile = (id) =>
   path.join(
     mkdirPrivate(path.join(stateHome(), "plans-v1")),
@@ -44,6 +46,15 @@ function strict(v, allowed) {
     throw new Error("Unknown plan fields; never store credential values");
 }
 function bound(repository) {
+  if (repositoryKind(repository).paged)
+    return repositoryBinding({
+      repo: checked(repository),
+      vault: fs.existsSync(path.join(repository, "encryption.json"))
+        ? JSON.parse(
+            readPrivate(path.join(repository, "encryption.json"), 4096),
+          )
+        : null,
+    });
   const h = openHost(repository, {
     environment: {
       ...process.env,
@@ -463,18 +474,39 @@ export async function runPlan(
         );
       if (restart && r.activeOperation) {
         if (
-          operationStatus(c.repository, r.activeOperation).state === "running"
+          (repositoryKind(c.repository).paged
+            ? await runEngine(
+                "operation-status",
+                { repository: c.repository, id: r.activeOperation },
+                { allowFailure: true },
+              )
+            : operationStatus(c.repository, r.activeOperation)
+          ).state === "running"
         )
           throw new Error("Cannot restart an active operation");
         r.activeOperation = null;
       }
-      r.activeOperation ??= await createOperation({
-        repository: c.repository,
-        source: c.source,
-        arguments: ["--label", c.name],
-      });
+      r.activeOperation ??= repositoryKind(c.repository).paged
+        ? (
+            await runEngine(
+              "operation-create",
+              { repository: c.repository, source: c.source, label: c.name },
+              { allowFailure: true },
+            )
+          ).operation
+        : await createOperation({
+            repository: c.repository,
+            source: c.source,
+            arguments: ["--label", c.name],
+          });
       persist();
-      result = await runOperation(c.repository, r.activeOperation, { recover });
+      result = repositoryKind(c.repository).paged
+        ? await runEngine("operation-run", {
+            repository: c.repository,
+            id: r.activeOperation,
+            recover,
+          })
+        : await runOperation(c.repository, r.activeOperation, { recover });
       r.activeOperation = null;
       r.evidence.backup = {
         snapshot: result.snapshot,
@@ -594,6 +626,10 @@ export async function runPlan(
     r.updated = Date.now();
     r.durationMs = r.updated - began;
     persist();
+    if (result.cleanup_blocked === true)
+      throw new Error(
+        "Fresh backup verified but damaged history remains; cleanup protection stays blocked",
+      );
     setCleanupGuard(
       c.repository,
       {

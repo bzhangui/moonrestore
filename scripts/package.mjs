@@ -35,6 +35,7 @@ const destination = path.join(
 fs.mkdirSync(destination); // Never overwrite a previous bundle.
 const files = [
   "bin/moonrestore.mjs",
+  "bin/engine-worker.mjs",
   "bin/sqlite-export.mjs",
   "bin/sqlite-verify.mjs",
   "bin/wal-fetch.mjs",
@@ -64,6 +65,22 @@ const files = [
   "platform/snapshot-provider.mjs",
   "platform/vss-native.mjs",
   "platform/paged-store.mjs",
+  "platform/paged-cache.mjs",
+  "platform/paged-journal.mjs",
+  "platform/paged-selection.mjs",
+  "platform/paged-service.mjs",
+  "platform/paged-compat.mjs",
+  "platform/paged-copy.mjs",
+  "platform/paged-remote.mjs",
+  "platform/paged-retention.mjs",
+  "platform/paged-scrub.mjs",
+  "platform/engine-client.mjs",
+  "platform/repository-kind.mjs",
+  "platform/storage-capabilities.mjs",
+  "platform/upgrade-commands.mjs",
+  "platform/wal-health.mjs",
+  "platform/plan-runner.mjs",
+  "platform/alert-delivery.mjs",
   "platform/paged-operations.mjs",
   "platform/paged-maintenance.mjs",
   "platform/postgres-physical.mjs",
@@ -111,6 +128,8 @@ const files = [
   "docs/RELIABILITY_0_7.md",
   "docs/RELIABILITY_0_8.md",
   "docs/FAULT_MATRIX_0_8.md",
+  "docs/UPGRADE_0_9.md",
+  "docs/RELIABILITY_0_9.md",
 ];
 if (process.platform !== "win32") files.push("_build/host/rename_noreplace");
 if (embedded)

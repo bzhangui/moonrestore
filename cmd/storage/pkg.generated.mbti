@@ -12,6 +12,10 @@ import {
 // Types and methods
 type Request derive(@json.FromJson)
 
+type RetentionRequest derive(@json.FromJson)
+
+type RetirementClock derive(@json.FromJson)
+
 // Type aliases
 
 // Traits

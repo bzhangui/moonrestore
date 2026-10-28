@@ -4,6 +4,8 @@ import path from "node:path";
 import { core, fingerprint, hash, openHost } from "./maintenance.mjs";
 import { checked } from "./vault.mjs";
 import { checkpoint } from "./activity.mjs";
+import { repositoryKind } from "./repository-kind.mjs";
+import { runEngine } from "./engine-client.mjs";
 const integer = (n, max) => {
   if (!Number.isInteger(n) || n < 0 || n > max)
     throw new Error("Invalid pagination");
@@ -18,6 +20,12 @@ export async function history(
   repository,
   { query = "", from = "", to = "", offset = 0 } = {},
 ) {
+  if (repositoryKind(repository).paged)
+    return runEngine(
+      "history",
+      { repository, query, from, to, offset },
+      { allowFailure: true },
+    );
   integer(offset, 100000);
   const q = queryText(query),
     data = await core(["list", repository]);
@@ -69,6 +77,45 @@ export async function searchHistory(
   const before = fingerprint(repository);
   if (state && state !== before)
     throw new Error("Repository changed; restart search");
+  if (repositoryKind(repository).paged) {
+    const page = await runEngine(
+      "history",
+      { repository, offset },
+      { allowFailure: true },
+    );
+    if (!page.snapshots.length)
+      return {
+        ok: page.ok,
+        results: [],
+        state: before,
+        next: null,
+        nextEntry: 0,
+        total_snapshots: page.total,
+      };
+    const snapshot = page.snapshots[0],
+      catalog = await runEngine("catalog", {
+        repository,
+        snapshot: snapshot.id,
+        query: q,
+        offset: entryOffset,
+      });
+    if (fingerprint(repository) !== before)
+      throw new Error("Repository changed during search");
+    return {
+      ok: page.ok,
+      results: catalog.entries.map((e) => ({
+        ...e,
+        snapshot: snapshot.id,
+        created: snapshot.created,
+        label: snapshot.label,
+      })),
+      scope: "snapshot_batch",
+      state: before,
+      next: catalog.more ? offset : offset + 1 < page.total ? offset + 1 : null,
+      nextEntry: catalog.more ? entryOffset + catalog.entries.length : 0,
+      total_snapshots: page.total,
+    };
+  }
   const list = (await core(["list", repository])).snapshots.sort(
       (a, b) => b.created.localeCompare(a.created) || a.id.localeCompare(b.id),
     ),
@@ -132,6 +179,10 @@ export function selections(p) {
   return [...new Set(values)].sort();
 }
 export async function restorePlan(p) {
+  if (repositoryKind(p.repository).paged) {
+    selections(p);
+    return runEngine("restore-preview", p);
+  }
   const selected = selections(p),
     repository = checked(p.repository),
     target = checked(p.target, false),
@@ -182,6 +233,10 @@ export async function restorePlan(p) {
   };
 }
 export async function restoreSelected(p) {
+  if (repositoryKind(p.repository).paged) {
+    selections(p);
+    return runEngine("restore", p, { allowFailure: p.partial === true });
+  }
   const preview = await restorePlan(p);
   if (preview.confirmation !== p.confirmation)
     throw new Error("Restore plan changed");
@@ -198,6 +253,8 @@ export async function restoreSelected(p) {
   );
 }
 export async function previewText(repository, snapshot, relative) {
+  if (repositoryKind(repository).paged)
+    return runEngine("text-preview", { repository, snapshot, path: relative });
   const model = await core(["catalog", repository, snapshot]),
     entry = model.entries.find((e) => e.path === relative);
   if (

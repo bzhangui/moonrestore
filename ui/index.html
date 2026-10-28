@@ -99,11 +99,16 @@
               ><button id="init" class="secondary" type="button">
                 创建新仓库
               </button>
+              <label
+                >新仓库格式<select id="new-repo-format">
+                  <option value="1">兼容格式 1</option>
+                  <option value="4">分页格式 4（大目录、检查点）</option>
+                </select></label
+              >
             </div>
           </form>
           <p class="muted">
-            自动任务拒绝意外空目录和明显文件数量下降。此页面创建普通仓库；加密仓库请使用
-            CLI 初始化和授权解锁。
+            自动任务拒绝意外空目录和明显文件数量下降。新格式需明确选择，不会转换已有仓库；加密创建请使用下方“加密与换机恢复准备”。
           </p>
         </section>
         <section id="versions">
@@ -219,6 +224,12 @@
             ><label class="check"
               ><input id="remember-key" type="checkbox" />明确授权当前 Windows
               用户使用 DPAPI 保存密钥</label
+            >
+            <label
+              >新加密仓库格式<select id="new-secure-format">
+                <option value="1">兼容格式 2</option>
+                <option value="4">分页加密格式 4</option>
+              </select></label
             >
           </div>
           <div class="actions">
@@ -367,7 +378,7 @@
                   placeholder="cache&#10;node_modules"
                 ></textarea></label
               ><label
-                >第二副本仓库（可选，须已初始化）<input
+                >第二副本仓库（旧格式须初始化；分页格式用新目录或同身份副本）<input
                   name="secondaryRepository"
                   autocomplete="off"
                 /><small

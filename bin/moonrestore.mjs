@@ -37,6 +37,9 @@ import { pagedMaintenanceCommand } from "../platform/paged-maintenance.mjs";
 import { nativeVssCommand } from "../platform/vss-native.mjs";
 import { physicalCommand } from "../platform/postgres-physical.mjs";
 import { monitorCommand } from "../platform/monitor-receiver.mjs";
+import { pagedOperationCommand } from "../platform/paged-journal.mjs";
+import { pagedCompat } from "../platform/paged-compat.mjs";
+import { upgradeCommand } from "../platform/upgrade-commands.mjs";
 if (process.env.MOONRESTORE_INTERNAL !== "1" && process.argv[2] === "--home") {
   if (!process.argv[3])
     throw new Error("--home requires a private state directory");
@@ -48,11 +51,14 @@ if (process.env.MOONRESTORE_INTERNAL !== "1") {
     const args = process.argv.slice(2);
     const result = await withParentControl(
       async () =>
+        (await upgradeCommand(args)) ??
+        (await pagedCompat(args)) ??
         (await operationCommand(args)) ??
         (await readinessCommand(args)) ??
         taskControlCommand(args) ??
         (await pagedCommand(args)) ??
         (await pagedMaintenanceCommand(args)) ??
+        (await pagedOperationCommand(args)) ??
         (await nativeVssCommand(args)) ??
         (await physicalCommand(args)) ??
         (await monitorCommand(args)) ??

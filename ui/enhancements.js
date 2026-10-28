@@ -446,6 +446,7 @@ $("init-encrypted").onclick = () =>
     if (confirm("在新路径创建加密仓库？请随后单独保存并演练恢复密钥。"))
       show(
         await api("init-encrypted", {
+          format: Number($("new-secure-format").value),
           repository: s.repository,
           password: s.password,
           confirmation: s.repository,

@@ -297,7 +297,9 @@ export async function physicalBackup(
 }
 const walName = (v) =>
   typeof v === "string" &&
-  (/^[A-F0-9]{24}$/.test(v) || /^[A-F0-9]{8}\.history$/.test(v));
+  (/^[A-F0-9]{24}$/.test(v) ||
+    /^[A-F0-9]{8}\.history$/.test(v) ||
+    /^[A-F0-9]{24}\.[A-F0-9]{8}\.backup$/.test(v));
 function walRoot(directory) {
   const root = checked(directory);
   if (
@@ -351,6 +353,8 @@ export function archiveWal(directory, name, source) {
     throw new Error("Canonical WAL or timeline-history name required");
   source = checked(source);
   const info = fileDigest(source);
+  if (!/^[A-F0-9]{24}$/.test(name) && info.size > 1048576)
+    throw new Error("Timeline/backup history size budget");
   if (
     /^[A-F0-9]{24}$/.test(name) &&
     (info.size < 1048576 || (info.size & (info.size - 1)) !== 0)

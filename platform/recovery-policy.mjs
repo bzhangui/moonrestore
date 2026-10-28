@@ -6,6 +6,7 @@ import { checked, mkdirPrivate, readPrivate, stateHome } from "./vault.mjs";
 import { atomicPrivate, repositoryBinding } from "./journal.mjs";
 import { openHost, hash, core, options } from "./maintenance.mjs";
 import { credentials } from "./activity.mjs";
+import { repositoryKind } from "./repository-kind.mjs";
 const id = (x) => typeof x === "string" && /^[a-f0-9]{64}$/.test(x);
 function location(repository) {
   const root = checked(repository),
@@ -16,6 +17,15 @@ function location(repository) {
   );
 }
 function binding(repository) {
+  if (repositoryKind(repository).paged)
+    return repositoryBinding({
+      repo: checked(repository),
+      vault: fs.existsSync(path.join(repository, "encryption.json"))
+        ? JSON.parse(
+            readPrivate(path.join(repository, "encryption.json"), 4096),
+          )
+        : null,
+    });
   const h = openHost(repository, {
     environment: {
       ...process.env,
@@ -93,9 +103,15 @@ export async function applyProtection(repository, input, confirmation) {
   const p = protectionPreview(repository, input);
   if (p.confirmation !== confirmation)
     throw new Error("Protection confirmation changed; preview again");
-  const h = openHost(repository, {
-    environment: { ...process.env, ...credentials(repository) },
-  });
+  const h = repositoryKind(repository).paged
+    ? await import("./paged-store.mjs").then((m) =>
+        m.PagedStore.open(repository, {
+          environment: { ...process.env, ...credentials(repository) },
+        }),
+      )
+    : openHost(repository, {
+        environment: { ...process.env, ...credentials(repository) },
+      });
   try {
     h.lock();
     if (protectionPreview(repository, input).confirmation !== confirmation)
@@ -109,14 +125,15 @@ export async function applyProtection(repository, input, confirmation) {
       Buffer.from(
         JSON.stringify({
           format: 1,
-          binding: repositoryBinding(h),
+          binding: binding(repository),
           config: p.config,
           updated: Date.now(),
         }),
       ),
     );
   } finally {
-    h.clean();
+    if (h.clean) h.clean();
+    else h.close();
   }
   return {
     ...protectionStatus(repository),

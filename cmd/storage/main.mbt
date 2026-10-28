@@ -25,6 +25,22 @@ struct Request {
 } derive(FromJson)
 
 ///|
+struct RetentionRequest {
+  records : Array[@backup.RetentionRecord]
+  keep_last : Int32
+  protected_ids : Array[String]
+} derive(FromJson)
+
+///|
+struct RetirementClock {
+  requested : Int64
+  current : Int64
+  old_uptime : Int64
+  uptime : Int64
+  grace_days : Int32
+} derive(FromJson)
+
+///|
 fn command(text : String, bytes : Bytes) -> String {
   try {
     guard text.length() <= 262144 && bytes.length() <= 8388608 else {
@@ -36,6 +52,34 @@ fn command(text : String, bytes : Bytes) -> String {
       "path" => {
         @backup.validate_path(r.session)
         Json::null()
+      }
+      "transition" => Json(@backup.operation_transition(r.session, r.previous))
+      "retirement-ready" =>
+        Json(@backup.retirement_ready(r.entries, r.total, r.count))
+      "retirement-clock" => {
+        let p : RetirementClock = @json.from_json(@json.parse(r.session))
+        Json(
+          @backup.retirement_clock_ready(
+            p.requested,
+            p.current,
+            p.old_uptime,
+            p.uptime,
+            p.grace_days,
+          ),
+        )
+      }
+      "retention" => {
+        let p : RetentionRequest = @json.from_json(@json.parse(r.session))
+        Json(
+          @backup.retention_keep(
+            p.records,
+            p.keep_last,
+            0,
+            0,
+            0,
+            p.protected_ids,
+          ),
+        )
       }
       "ledger-new" => {
         guard ledgers.length() < 16 && !ledgers.contains(r.session) else {

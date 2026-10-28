@@ -163,6 +163,7 @@ export async function garbagePaged(
   repository,
   { batch = 100, confirmation } = {},
 ) {
+  (await import("./plans.mjs")).assertCleanupGuard(repository);
   const store = await PagedStore.open(repository),
     index = new PagedIndex(store);
   try {
@@ -363,6 +364,7 @@ export async function purgePaged(
       throw new Error("Confirm exact quarantine batch");
     if (!Number.isSafeInteger(now) || now < 0)
       throw new Error("Invalid purge clock");
+    (await import("./plans.mjs")).assertCleanupGuard(repository, now);
     if (confirmation) store.lock();
     const { base, record } = manifest(store, batch);
     auditRoots(store, index);

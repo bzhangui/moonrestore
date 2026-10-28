@@ -20,6 +20,8 @@ import {
   stateHome,
 } from "./vault.mjs";
 import { checkpoint, credentials } from "./activity.mjs";
+import { repositoryKind } from "./repository-kind.mjs";
+import { runEngine } from "./engine-client.mjs";
 
 const id = (s) => {
   if (typeof s !== "string" || !/^[a-f0-9]{64}$/.test(s))
@@ -108,6 +110,15 @@ export async function rescuePlan({
       : {},
   );
   const before = fingerprint(repository);
+  if (repositoryKind(repository).paged)
+    return {
+      ...(await runEngine(
+        "restore-preview",
+        { repository, snapshot, target, selections, partial: true },
+        { env },
+      )),
+      source_read_only: true,
+    };
   const result = await core(
     [
       "rescue-plan",
@@ -138,6 +149,35 @@ export async function rescuePlan({
 export async function rescueToNewTarget(p) {
   if (typeof p.acceptPartial !== "boolean" || !p.acceptPartial)
     throw new Error("Explicit partial rescue acceptance required");
+  if (repositoryKind(p.repository).paged) {
+    const {
+        repository,
+        snapshot,
+        target,
+        selections = [],
+        confirmation,
+        recoveryKeyFile,
+      } = p,
+      env = recoveryKeyFile
+        ? {
+            MOONRESTORE_PASSWORD: "",
+            MOONRESTORE_KEY_FILE: checked(recoveryKeyFile),
+          }
+        : {};
+    const result = await runEngine(
+      "restore",
+      { repository, snapshot, target, selections, confirmation, partial: true },
+      { env, allowFailure: true },
+    );
+    if (!result.post_restore_readback)
+      throw new Error("Rescue readback not completed");
+    return {
+      ...result,
+      source_read_only: true,
+      real_cross_host_verified: false,
+      files: reportFiles(result),
+    };
+  }
   const preview = await rescuePlan(p);
   if (
     typeof p.confirmation !== "string" ||
@@ -182,18 +222,25 @@ export async function recoveryChecklist(repository, output) {
   const listed = await core(["list", repository], { env: readonly() });
   if (!listed.snapshots.length || listed.snapshots.length > 5000)
     throw new Error("Checklist requires 1..5000 validated snapshots");
-  const host = openHost(repository, {
-    environment: { ...process.env, ...credentials(repository), ...readonly() },
-  });
+  const kind = repositoryKind(repository);
+  const host = kind.paged
+    ? null
+    : openHost(repository, {
+        environment: {
+          ...process.env,
+          ...credentials(repository),
+          ...readonly(),
+        },
+      });
   let encrypted, profile, identity;
   try {
-    encrypted = !!host.key;
-    profile = host.profile;
+    encrypted = kind.paged ? kind.encrypted : !!host.key;
+    profile = kind.paged ? "paged-v4" : host.profile;
     identity =
-      host.vault?.id ||
+      host?.vault?.id ||
       hash(readPrivate(path.join(checked(repository), "moonrestore"), 128));
   } finally {
-    host.clean();
+    host?.clean();
   }
   const record = {
     format: 1,
@@ -450,6 +497,12 @@ export async function scrub(
   repository,
   { maxFiles = 100, maxBytes = "268435456", snapshot } = {},
 ) {
+  if (repositoryKind(repository).paged)
+    return runEngine(
+      "scrub",
+      { repository, maxFiles, maxBytes, ...(snapshot ? { snapshot } : {}) },
+      { allowFailure: true },
+    );
   integer(maxFiles, 1, 1000);
   if (
     typeof maxBytes !== "string" ||
@@ -563,6 +616,12 @@ export async function scrub(
   }
 }
 export async function recoveryHealth(repository, { maxAgeHours = 168 } = {}) {
+  if (repositoryKind(repository).paged)
+    return runEngine(
+      "scrub-status",
+      { repository, maxAgeHours },
+      { allowFailure: true },
+    );
   integer(maxAgeHours, 1, 8760);
   const ids = await listedSnapshots(repository),
     state = loadEvidence(

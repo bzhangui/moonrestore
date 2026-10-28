@@ -14,6 +14,7 @@ import {
 import { checked, readPrivate, writePrivate, unseal } from "./vault.mjs";
 import { publishDirectory } from "./adapter.mjs";
 import { checkpoint, credentials } from "./activity.mjs";
+import { repositoryKind } from "./repository-kind.mjs";
 const ro = { MOONRESTORE_READ_ONLY: "1", MOONRESTORE_RECOVERY_TARGET: "" };
 const validId = (s) => typeof s === "string" && /^[a-f0-9]{64}$/.test(s);
 const safeMember = (s) =>
@@ -34,6 +35,10 @@ export async function pushSnapshot(
     !(backend instanceof S3Backend)
   )
     throw new Error("Invalid remote snapshot request");
+  if (repositoryKind(repository).paged)
+    return import("./paged-remote.mjs").then((m) =>
+      m.pushPaged(repository, snapshot, backend, { prefix }),
+    );
   const before = fingerprint(repository),
     model = await core(["catalog", repository, snapshot], { env: ro });
   const audit = await core(["audit", repository, snapshot], { env: ro });
@@ -149,6 +154,10 @@ export async function restoreRemote(
   const response = await backend.get(receiptKey, { version, checksum }),
     record = JSON.parse(
       new TextDecoder("utf-8", { fatal: true }).decode(response.bytes),
+    );
+  if (record?.kind === "moonrestore_paged_encrypted_snapshot")
+    return import("./paged-remote.mjs").then((m) =>
+      m.restorePagedRemote(backend, record, destination),
     );
   if (
     record.format !== 1 ||

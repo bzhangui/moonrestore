@@ -150,6 +150,11 @@ export class PagedStore {
       parent = checked(path.dirname(target));
     if (fs.existsSync(target))
       throw new Error("Paged repository target must not exist");
+    const { storageCapabilities } = await import("./storage-capabilities.mjs");
+    if (!storageCapabilities(parent).ok)
+      throw new Error(
+        "Format4 requires verified conditional hardlinks and exclusive publication; filesystem unsupported",
+      );
     const core = await storageCore(),
       vault = encrypted ? createVault(environment.MOONRESTORE_PASSWORD) : null;
     const stage = fs.mkdtempSync(path.join(parent, ".moonrestore-paged-init-"));
@@ -310,7 +315,7 @@ export class PagedStore {
     if (process.env.MOONRESTORE_TEST_CRASH === "paged-" + stage)
       process.exit(86);
   }
-  lock({ allowPending = false } = {}) {
+  lock({ allowPending = false, operation } = {}) {
     if (
       !allowPending &&
       fs.existsSync(path.join(this.repo, ".gc-pending.json"))
@@ -327,6 +332,7 @@ export class PagedStore {
             pid: process.pid,
             host: os.hostname(),
             repository: this.repoId,
+            ...(operation ? { operation } : {}),
           }),
         ),
       );
@@ -388,6 +394,7 @@ export class PagedStore {
     return raw;
   }
   chunk(record) {
+    checkpoint("paged_chunk_verify");
     const raw = this.pack(record.pack),
       at = record.offset,
       length = Number(record.size);
@@ -458,26 +465,36 @@ export class PagedStore {
     for (const value of root.excludes) this.core("path", { session: value });
     return root;
   }
-  *snapshots() {
+  *snapshotCandidates() {
     const dir = fs.opendirSync(path.join(this.repo, "snapshots"));
     try {
       for (let item = dir.readSync(); item; item = dir.readSync()) {
         if (!item.isFile() || !id(item.name))
           throw new Error("Unexpected paged snapshot member");
-        if (!this.key) yield item.name;
+        if (!this.key) yield { id: item.name };
         else {
-          const raw = bounded(
-              path.join(this.repo, "snapshots", item.name),
-              65600,
-            ),
-            value = unseal(this.key, this.vault, "snapshot", item.name, raw);
-          if (this.logical(value.bytes) !== value.id)
-            throw new Error("Snapshot identity mismatch");
-          yield value.id;
+          try {
+            const raw = bounded(
+                path.join(this.repo, "snapshots", item.name),
+                65600,
+              ),
+              value = unseal(this.key, this.vault, "snapshot", item.name, raw);
+            if (this.logical(value.bytes) !== value.id)
+              throw new Error("Snapshot identity mismatch");
+            yield { id: value.id };
+          } catch {
+            yield { damaged: true, physical: item.name };
+          }
         }
       }
     } finally {
       dir.closeSync();
+    }
+  }
+  *snapshots() {
+    for (const candidate of this.snapshotCandidates()) {
+      if (candidate.damaged) throw new Error("Damaged encrypted snapshot root");
+      yield candidate.id;
     }
   }
 }
@@ -539,6 +556,7 @@ export class PagedIndex {
     this.db
       .prepare("INSERT OR REPLACE INTO " + table + " VALUES(?,?)")
       .run(key, this.encode(table, key, value));
+    if (table === "objects") this.onObject?.(key, value);
   }
   get(table, key) {
     if (!["pages", "objects", "source"].includes(table))
@@ -552,7 +570,11 @@ export class PagedIndex {
           "=?",
       )
       .get(key);
-    return row ? this.decode(table, key, row.payload) : null;
+    return row
+      ? this.decode(table, key, row.payload)
+      : table === "objects"
+        ? (this.lookupObject?.(key) ?? null)
+        : null;
   }
   path(relative, kind) {
     const parent = relative.includes("/")
@@ -617,8 +639,10 @@ export function indexSnapshot(
   store,
   index,
   snapshot,
-  { verifyContents = true } = {},
+  { verifyContents = true, verifyObjects = true } = {},
 ) {
+  if (verifyContents && !verifyObjects)
+    throw new Error("Content verification requires object reads");
   index.clearSnapshot();
   const root = store.root(snapshot),
     ledger = randomUUID(),
@@ -674,9 +698,11 @@ export function indexSnapshot(
           if (record.kind === "file" && verifyContents)
             store.core("hash-new", { session: fileHash });
         } else if (record.kind === "chunk") {
-          const bytes = store.chunk(record);
-          if (verifyContents)
-            store.core("hash-push", { session: fileHash }, bytes);
+          if (verifyObjects) {
+            const bytes = store.chunk(record);
+            if (verifyContents)
+              store.core("hash-push", { session: fileHash }, bytes);
+          }
           index.put("objects", index.key("object", record.id), record);
           index.db
             .prepare("INSERT OR IGNORE INTO live VALUES(?)")

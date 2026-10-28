@@ -15,6 +15,7 @@ import {
   rememberKey,
 } from "./vault.mjs";
 import { activity, checkpoint, credentials } from "./activity.mjs";
+import { repositoryKind } from "./repository-kind.mjs";
 
 export const cli = fileURLToPath(
   new URL("../bin/moonrestore.mjs", import.meta.url),
@@ -65,6 +66,16 @@ export function core(
   args,
   { env = {}, allowFailure = false, timeout, signal } = {},
 ) {
+  if (
+    ["backup", "plan", "verify", "audit", "list", "restore", "status"].includes(
+      args[0],
+    ) &&
+    args[1] &&
+    repositoryKind(args[1]).paged
+  )
+    return import("./paged-compat.mjs").then((m) =>
+      m.pagedCompat(args, { env, allowFailure }),
+    );
   const context = activity();
   signal ??= context?.signal;
   timeout ??= context?.budgetMs ?? 1800000;
@@ -200,8 +211,9 @@ export function fingerprint(repository) {
   if (names.length > 100000) throw new Error("Snapshot budget exceeded");
   const state = createHash("sha256");
   state.update(readPrivate(path.join(root, "moonrestore"), 128));
+  const paged = repositoryKind(repository).paged;
   for (const name of names) {
-    if (!/^[a-f0-9]{64}\.json$/.test(name))
+    if (!(paged ? /^[a-f0-9]{64}$/ : /^[a-f0-9]{64}\.json$/).test(name))
       throw new Error("Unexpected snapshot");
     state.update(name);
     state.update(readPrivate(path.join(dir, name), 33554496));
@@ -295,6 +307,33 @@ export async function drill(
     env = {},
   } = {},
 ) {
+  if (repositoryKind(repository).paged) {
+    const { runEngine } = await import("./engine-client.mjs"),
+      started = new Date().toISOString();
+    let report;
+    try {
+      report = {
+        ...(await runEngine(
+          "drill",
+          { repository, snapshot, prefix },
+          { env },
+        )),
+        started,
+        finished: new Date().toISOString(),
+      };
+    } catch {
+      report = {
+        ok: false,
+        kind: "restore_drill",
+        snapshot,
+        started,
+        finished: new Date().toISOString(),
+        error: "restore_or_readback_failed",
+        real_user_pilot: false,
+      };
+    }
+    return { ...report, files: saveReport(report, { directory }) };
+  }
   id(snapshot);
   parent = checked(parent);
   const owned = fs.mkdtempSync(path.join(parent, "moonrestore-drill-"));
@@ -393,14 +432,23 @@ export async function capacity(
         source,
         ...excludes.flatMap((x) => ["--exclude", x]),
       ]);
-  const required = restore
-    ? BigInt(
-        (await core(["catalog", repository, id(restore)])).entries.reduce(
-          (n, e) => n + BigInt(e.size),
-          0n,
-        ),
-      )
-    : BigInt(plan.logical_bytes);
+  const required =
+    restore && repositoryKind(repository).paged
+      ? BigInt(
+          (
+            await import("./engine-client.mjs").then((m) =>
+              m.runEngine("measure", { repository, snapshot: id(restore) }),
+            )
+          ).logical_bytes,
+        )
+      : restore
+        ? BigInt(
+            (await core(["catalog", repository, id(restore)])).entries.reduce(
+              (n, e) => n + BigInt(e.size),
+              0n,
+            ),
+          )
+        : BigInt(plan.logical_bytes);
   const location = checked(restore ? source : repository),
     stats = fs.statfsSync(location, { bigint: true }),
     free = stats.bavail * stats.bsize,
@@ -469,6 +517,15 @@ export async function replicate(
   destination,
   { encrypted = false } = {},
 ) {
+  if (repositoryKind(repository).paged) {
+    if (encrypted && !repositoryKind(repository).encrypted)
+      throw new Error(
+        "Use paged-rebuild with a new password to encrypt a plain format4 source",
+      );
+    return import("./paged-copy.mjs").then((m) =>
+      m.copyPaged(repository, destination),
+    );
+  }
   const source = checked(repository),
     dest = path.resolve(destination);
   const canonical = (v) => (process.platform === "win32" ? v.toLowerCase() : v);
@@ -690,6 +747,16 @@ export async function advanced(args) {
       throw new Error(
         "Usage: key-export repository --output NEW-private-file | key-store repository",
       );
+    if (repositoryKind(p[0]).paged) {
+      const { runEngine } = await import("./engine-client.mjs");
+      return command === "key-export"
+        ? runEngine("key-export", {
+            repository: p[0],
+            output: v.output,
+            confirmation: p[0],
+          })
+        : runEngine("unlock", { repository: p[0], remember: true });
+    }
     const host = openHost(p[0]);
     try {
       if (!host.key) throw new Error("Repository is not encrypted");

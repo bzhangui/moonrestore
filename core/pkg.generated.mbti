@@ -38,6 +38,10 @@ pub fn rescue_entries(Snapshot, Array[String], Array[String]) -> Array[Entry] ra
 
 pub fn retention_keep(Array[RetentionRecord], Int, Int, Int, Int, Array[String]) -> Array[String] raise BackupError
 
+pub fn retirement_clock_ready(Int64, Int64, Int64, Int64, Int) -> Bool raise
+
+pub fn retirement_ready(Int64, Int64, Int) -> Bool raise
+
 pub fn schedule_due(Bool, Bool, Int, Int, Int64, Int64, Int64, Int64) -> Bool raise
 
 pub fn schedule_health(Bool, Bool, Bool, Int64, Int64, Int64, Int64) -> String raise
@@ -193,7 +197,8 @@ pub fn RecoveryGoal::to_json(Self) -> Json
 pub(all) struct RetentionRecord {
   id : String
   created : String
-}
+} derive(@json.FromJson)
+pub fn RetentionRecord::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 
 pub(all) struct Snapshot {
   format : Int

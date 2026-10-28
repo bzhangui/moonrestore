@@ -95,6 +95,20 @@ fn help() -> String {
     #|  maintenance-recover <repository> --confirm <repository-identity>
     #|  maintenance-restore <repository> <batch> --confirm <repository-identity>
     #|  workbench [--port 8790]                  Authenticated loopback UI
+    #|  paged-capabilities REPO | storage-capabilities EXISTING_PARENT
+    #|  paged-operation-create REPO SOURCE [--label LABEL --exclude PATH]
+    #|  paged-operation-run REPO UUID [--recover] | paged-operation-status REPO UUID
+    #|  paged-selected-preview REPO SHA NEW_TARGET [--selections PRIVATE_JSON --partial]
+    #|  paged-selected-restore REPO SHA NEW_TARGET --confirm TOKEN [--selections PRIVATE_JSON --partial]
+    #|  paged-replica REPO NEW_REPO [--snapshots SHA,SHA]
+    #|  paged-rebuild REPO NEW_REPO [--snapshots SHA,SHA --plaintext]
+    #|  paged-retirement-preview REPO PRIVATE_CONFIG_JSON
+    #|  paged-retirement-request REPO PRIVATE_CONFIG_JSON --confirm TOKEN
+    #|  paged-retirement-finalize REPO REQUEST_UUID --confirm SECOND_TOKEN
+    #|  wal-archive-bind ARCHIVE --cluster SYSTEM_ID --segment-bytes N --confirm ARCHIVE
+    #|  wal-health ARCHIVE PRIVATE_CONFIG_JSON
+    #|  plan-runner [--interval MILLISECONDS --cycles N --recover]
+    #|  alert-deliver MONITOR_DIR ADAPTER_URL --confirm ADAPTER_URL [--allow-remote]
     #|  help | version
     #|JSON outputs; byte counts are decimal strings. All IDs use 64 lowercase hex.
   text
@@ -126,7 +140,7 @@ pub fn run(args : Array[String]) -> Unit raise {
     return
   }
   if args[0] == "version" {
-    println("MoonRestore 0.8.0")
+    println("MoonRestore 0.9.0")
     return
   }
   if args[0] == "operation-transition" {

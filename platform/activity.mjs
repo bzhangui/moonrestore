@@ -23,7 +23,11 @@ export async function withParentControl(work) {
   )
     throw new Error("Invalid rescue parent-control path");
   const controller = new AbortController();
+  let lastCheck = -Infinity;
   const check = () => {
+    const now = performance.now();
+    if (now - lastCheck < 50) return;
+    lastCheck = now;
     try {
       const r = JSON.parse(readPrivate(exact, 256));
       if (
@@ -44,7 +48,10 @@ export async function withParentControl(work) {
     throw new Error("Rescue parent is cancelled or unavailable");
   const timer = setInterval(check, 100);
   try {
-    return await withSignal(controller.signal, work);
+    return await storage.run(
+      { ...activity(), signal: controller.signal, parentCheck: check },
+      work,
+    );
   } finally {
     clearInterval(timer);
   }
@@ -72,6 +79,7 @@ export const withCredentials = (resolve, work) =>
   storage.run({ ...activity(), credentials: resolve }, work);
 export function checkpoint(phase, extra = {}) {
   const context = activity();
+  context?.parentCheck?.();
   if (context?.signal?.aborted) throw new Error("Operation cancelled");
   context?.progress?.({ phase, ...extra });
 }

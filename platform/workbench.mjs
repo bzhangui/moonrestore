@@ -39,6 +39,8 @@ import {
   recoveryHealth,
 } from "./recovery.mjs";
 import { randomUUID } from "node:crypto";
+import { repositoryKind } from "./repository-kind.mjs";
+import { runEngine } from "./engine-client.mjs";
 import { savePlan, listPlans, runPlan } from "./plans.mjs";
 import { recoveryReadiness } from "./readiness.mjs";
 import {
@@ -297,16 +299,32 @@ export async function startWorkbench({
         });
       case "operation-status":
         object(p, ["repository", "id"]);
+        if (repositoryKind(p.repository).paged)
+          return runEngine(
+            "operation-status",
+            { repository: p.repository, id: p.id },
+            { allowFailure: true },
+          );
         return { ...operationStatus(p.repository, p.id), ok: true };
       case "operation-resume":
         object(p, ["repository", "id", "recover"]);
         if (p.recover !== undefined && typeof p.recover !== "boolean")
           throw new Error("Strict recovery flag required");
+        if (repositoryKind(p.repository).paged)
+          return runEngine("operation-run", {
+            repository: p.repository,
+            id: p.id,
+            recover: p.recover ?? false,
+          });
         return runOperation(p.repository, p.id, {
           recover: p.recover === true,
         });
       case "restore-resumable": {
         object(p, ["repository", "snapshot", "target", "confirmation"]);
+        if (repositoryKind(p.repository).paged)
+          throw new Error(
+            "分页格式请使用已核验的选择恢复；当前不支持恢复写出阶段断点续写，不自动降级为可续作。",
+          );
         if (p.confirmation !== p.target)
           throw new Error("Explicit new target confirmation required");
         const id = await createOperation({
@@ -368,6 +386,7 @@ export async function startWorkbench({
         return searchHistory(p.repository, p);
       case "catalog": {
         object(p, ["repository", "snapshot", "offset", "query"]);
+        if (repositoryKind(p.repository).paged) return runEngine("catalog", p);
         if (
           !Number.isInteger(p.offset ?? 0) ||
           (p.offset ?? 0) < 0 ||
@@ -393,6 +412,7 @@ export async function startWorkbench({
       }
       case "compare":
         object(p, ["repository", "before", "after"]);
+        if (repositoryKind(p.repository).paged) return runEngine("compare", p);
         return core(["diff", p.repository, p.before, p.after]);
       case "text-preview":
         object(p, ["repository", "snapshot", "path"]);
@@ -405,6 +425,7 @@ export async function startWorkbench({
           "prefix",
           "selections",
           "restoreModes",
+          "partial",
         ]);
         const result = await restorePlan(p);
         delete result.plan;
@@ -419,6 +440,7 @@ export async function startWorkbench({
           "selections",
           "confirmation",
           "restoreModes",
+          "partial",
         ]);
         return restoreSelected(p);
       case "report":
@@ -432,26 +454,50 @@ export async function startWorkbench({
         return capacity(p.repository, p.source);
       case "prune-preview": {
         object(p, ["repository"]);
+        if (repositoryKind(p.repository).paged)
+          throw new Error(
+            "分页历史保留请使用 paged-retirement-preview/request/finalize 显式流程；此旧格式清理入口不代替风险确认。",
+          );
         const result = await previewPrune(p.repository);
         delete result.plan.entries;
         return result;
       }
       case "init":
-        object(p, ["repository", "confirmation"]);
+        object(p, ["repository", "confirmation", "format"]);
         if (p.confirmation !== p.repository)
           throw new Error("Explicit repository confirmation required");
+        if (p.format === 4)
+          return runEngine("init", {
+            repository: p.repository,
+            encrypted: false,
+          });
+        if (p.format !== undefined && p.format !== 1)
+          throw new Error("Explicit format 1 or 4 required");
         return { ...(await core(["init", p.repository])), ok: true };
       case "init-encrypted": {
-        object(p, ["repository", "password", "confirmation"]);
+        object(p, ["repository", "password", "confirmation", "format"]);
         if (p.confirmation !== p.repository || typeof p.password !== "string")
           throw new Error("Explicit encrypted initialization required");
-        const result = await core(["init", p.repository], {
-          env: {
-            MOONRESTORE_INIT_ENCRYPTED: "1",
-            MOONRESTORE_PASSWORD: p.password,
-            MOONRESTORE_KEY_FILE: "",
-          },
-        });
+        if (p.format !== undefined && p.format !== 1 && p.format !== 4)
+          throw new Error("Explicit format 1 or 4 required");
+        const result = await (p.format === 4
+          ? runEngine(
+              "init",
+              { repository: p.repository, encrypted: true },
+              {
+                env: {
+                  MOONRESTORE_PASSWORD: p.password,
+                  MOONRESTORE_KEY_FILE: "",
+                },
+              },
+            )
+          : core(["init", p.repository], {
+              env: {
+                MOONRESTORE_INIT_ENCRYPTED: "1",
+                MOONRESTORE_PASSWORD: p.password,
+                MOONRESTORE_KEY_FILE: "",
+              },
+            }));
         secrets.set(secretKey(p.repository), {
           expires: Date.now() + 1800000,
           env: { MOONRESTORE_PASSWORD: p.password, MOONRESTORE_KEY_FILE: "" },
@@ -472,10 +518,19 @@ export async function startWorkbench({
             MOONRESTORE_PASSWORD: p.password || "",
             MOONRESTORE_KEY_FILE: p.recoveryKeyFile || "",
           },
-          host = openHost(p.repository, { environment: env });
+          host = repositoryKind(p.repository).paged
+            ? null
+            : openHost(p.repository, { environment: env });
         try {
-          if (!host.key) throw new Error("Repository is not encrypted");
-          if (p.remember) rememberKey(host.vault, host.key);
+          if (host) {
+            if (!host.key) throw new Error("Repository is not encrypted");
+            if (p.remember) rememberKey(host.vault, host.key);
+          } else
+            await runEngine(
+              "unlock",
+              { repository: p.repository, remember: p.remember ?? false },
+              { env },
+            );
           secrets.set(secretKey(p.repository), {
             expires: Date.now() + 1800000,
             env: p.remember
@@ -492,7 +547,7 @@ export async function startWorkbench({
             dpapi_requested: !!p.remember,
           };
         } finally {
-          host.clean();
+          host?.clean();
         }
       }
       case "lock-session":
@@ -503,6 +558,8 @@ export async function startWorkbench({
         object(p, ["repository", "output", "confirmation"]);
         if (p.confirmation !== p.repository)
           throw new Error("Explicit key export required");
+        if (repositoryKind(p.repository).paged)
+          return runEngine("key-export", p);
         return advanced(["key-export", p.repository, "--output", p.output]);
       case "key-drill":
         object(p, ["repository", "snapshot", "recoveryKeyFile"]);
@@ -521,6 +578,17 @@ export async function startWorkbench({
           typeof p.newPassword !== "string"
         )
           throw new Error("Explicit password change required");
+        if (repositoryKind(p.repository).paged) {
+          const result = await runEngine("password-change", p);
+          secrets.set(secretKey(p.repository), {
+            expires: Date.now() + 1800000,
+            env: {
+              MOONRESTORE_PASSWORD: p.newPassword,
+              MOONRESTORE_KEY_FILE: "",
+            },
+          });
+          return result;
+        }
         const host = openHost(p.repository);
         try {
           host.lock();

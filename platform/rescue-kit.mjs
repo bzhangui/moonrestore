@@ -15,6 +15,7 @@ import { core, openHost, options } from "./maintenance.mjs";
 import { credentials, checkpoint, activity } from "./activity.mjs";
 import { verifyDistribution, sha256 } from "./distribution.mjs";
 import { atomicPrivate } from "./journal.mjs";
+import { repositoryKind } from "./repository-kind.mjs";
 const digest = (s) => typeof s === "string" && /^[a-f0-9]{64}$/.test(s);
 function identity(repository) {
   const magic = readPrivate(
@@ -138,7 +139,8 @@ export async function restoreWithRescueKit(
   target,
 ) {
   const check = checkRescueKit(kit, expectedRecipe, repository),
-    dest = checked(target, false);
+    dest = checked(target, false),
+    paged = repositoryKind(repository).paged;
   if (fs.existsSync(dest)) throw new Error("Rescue target must not exist");
   // Fresh state proves that no old jobs, indexes, DPAPI registration or journal is needed.
   const home = fs.mkdtempSync(
@@ -184,7 +186,7 @@ export async function restoreWithRescueKit(
       executable,
       [
         path.join(kit, "bin", "moonrestore.mjs"),
-        "restore-resumable",
+        paged ? "restore" : "restore-resumable",
         repository,
         check.snapshot,
         dest,
@@ -251,7 +253,15 @@ export async function restoreWithRescueKit(
       try {
         if (interrupted || code !== 0 || used > 1048576) throw new Error();
         const r = JSON.parse(out);
-        if (r.ok !== true || r.state !== "completed") throw new Error();
+        if (
+          r.ok !== true ||
+          r.post_restore_readback !== true ||
+          (paged
+            ? r.complete !== true || r.snapshot !== check.snapshot
+            : r.state !== "completed")
+        )
+          throw new Error();
+        if (paged) r.state = "completed";
         resolve(r);
       } catch {
         reject(

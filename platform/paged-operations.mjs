@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
-import { randomUUID } from "node:crypto";
+import { randomUUID, randomBytes } from "node:crypto";
 import { deflateSync } from "node:zlib";
 import { checked, mkdirPrivate, stateHome } from "./vault.mjs";
 import {
@@ -14,6 +14,7 @@ import {
 } from "./paged-store.mjs";
 import { publishDirectory } from "./adapter.mjs";
 import { core, options, removeOwned } from "./maintenance.mjs";
+import { PagedCache, loadHistory, fileFingerprint } from "./paged-cache.mjs";
 const record = (kind, fields = {}) => ({
   kind,
   path: "",
@@ -48,7 +49,17 @@ const overlap = (a, b) => {
 export async function backupPaged(
   repository,
   source,
-  { label = "", excludes = [], environment = process.env } = {},
+  {
+    label = "",
+    excludes = [],
+    environment = process.env,
+    fullHistory = false,
+    operationId,
+    startedAt,
+    seed,
+    onCheckpoint,
+    onRoot,
+  } = {},
 ) {
   if (typeof label !== "string" || label.length > 200)
     throw new Error("Invalid paged label");
@@ -64,7 +75,10 @@ export async function backupPaged(
   const hashSession = randomUUID(),
     chunkSession = randomUUID();
   let sourceRoot;
-  let page = [],
+  let cache,
+    history,
+    invalidObjects = 0,
+    page = [],
     sequence = 0,
     previous = "",
     entries = 0,
@@ -97,17 +111,36 @@ export async function backupPaged(
           "Private state must be outside the source or explicitly excluded",
         );
     }
-    store.lock();
-    for (const snapshot of store.snapshots())
-      indexSnapshot(store, index, snapshot);
-    index.clearSnapshot();
+    store.lock({ operation: operationId });
+    cache = new PagedCache(store);
+    history = loadHistory(store, index, { cache, full: fullHistory });
+    seed?.(index);
     store.core("ledger-new", { session: ledger });
     const flushPage = () => {
       if (!page.length) return;
-      const value = { format: 4, sequence, previous, records: page },
-        bytes = Buffer.from(JSON.stringify(value));
+      const value = { format: 4, sequence, previous, records: page };
+      let bytes = Buffer.from(JSON.stringify(value));
       store.core("page", { sequence, previous, count: page.length }, bytes);
-      const digest = store.logical(bytes);
+      let digest = store.logical(bytes);
+      if (fs.existsSync(store.file("page", digest)))
+        try {
+          store.read("page", digest);
+        } catch {
+          // Semantically identical JSON with distinct valid whitespace never
+          // overwrites a damaged immutable page at its old name.
+          invalidObjects++;
+          const whitespace = [...randomBytes(16)]
+            .map((n) =>
+              n
+                .toString(2)
+                .padStart(8, "0")
+                .replaceAll("0", " ")
+                .replaceAll("1", "\t"),
+            )
+            .join("");
+          bytes = Buffer.concat([bytes, Buffer.from("\n" + whitespace)]);
+          digest = store.logical(bytes);
+        }
       store.write("page", digest, bytes);
       store.read("page", digest);
       previous = digest;
@@ -144,8 +177,21 @@ export async function backupPaged(
         }
       let pack;
       if (raw.length > 1) {
-        const plain = Buffer.concat(raw),
-          compressed = deflateSync(plain),
+        let plain = Buffer.concat(raw);
+        pack = store.logical(plain);
+        if (fs.existsSync(store.file("pack", pack)))
+          try {
+            store.pack(pack);
+          } catch {
+            invalidObjects++;
+            const nonce = randomBytes(32),
+              header = Buffer.alloc(36);
+            header.writeUInt32LE(nonce.length);
+            Buffer.from(store.logical(nonce), "hex").copy(header, 4);
+            plain = Buffer.concat([plain, header, nonce]);
+            pack = store.logical(plain);
+          }
+        const compressed = deflateSync(plain),
           use = compressed.length + 32 < plain.length,
           encoded = Buffer.alloc(9);
         encoded.write("MRP4");
@@ -153,11 +199,12 @@ export async function backupPaged(
         encoded.writeUInt32LE(plain.length, 5);
         pack = store.logical(plain);
         const payload = Buffer.concat([encoded, use ? compressed : plain]);
-        store.write("pack", pack, payload);
+        const written = store.write("pack", pack, payload);
         store.pack(pack);
-        storedBytes += payload.length;
+        if (written) storedBytes += fs.statSync(store.file("pack", pack)).size;
         store.fail("pack-flushed");
       }
+      const checkpointRows = [];
       for (const item of queue) {
         if (item.bytes) {
           const value = record("chunk", {
@@ -167,8 +214,13 @@ export async function backupPaged(
           });
           index.put("objects", index.key("object", item.id), value);
           emit(value);
-        } else emit(item);
+          checkpointRows.push(value);
+        } else {
+          emit(item);
+          if (item.kind === "chunk") checkpointRows.push(item);
+        }
       }
+      onCheckpoint?.(checkpointRows);
       queue = [];
       packBytes = 6;
     };
@@ -180,12 +232,24 @@ export async function backupPaged(
       const digest = store.logical(bytes),
         existing = index.get("objects", index.key("object", digest));
       if (existing) {
-        store.chunk(existing);
-        enqueue(existing);
-        reusedBytes += bytes.length;
-        return;
+        try {
+          if (existing.id !== digest || Number(existing.size) !== bytes.length)
+            throw new Error("Locator mismatch");
+          store.chunk(existing);
+          enqueue(existing);
+          reusedBytes += bytes.length;
+          return;
+        } catch {
+          invalidObjects++;
+          const k = index.key("object", digest);
+          index.db.prepare("DELETE FROM objects WHERE k=?").run(k);
+          cache.delete("object:" + k);
+        }
       }
-      if (packBytes + 36 + bytes.length > PACK_LIMIT || queue.length >= 128)
+      if (
+        packBytes + 36 + bytes.length > PACK_LIMIT - 80 ||
+        queue.length >= 128
+      )
         flushPack();
       queue.push({ id: digest, bytes: Buffer.from(bytes) });
       packBytes += 36 + bytes.length;
@@ -303,7 +367,7 @@ export async function backupPaged(
     const root = {
       format: 4,
       repository: store.repoId,
-      created: new Date().toISOString(),
+      created: startedAt ?? new Date().toISOString(),
       label,
       pages: sequence,
       last_page: previous,
@@ -312,12 +376,41 @@ export async function backupPaged(
       bytes: String(total),
       excludes,
     };
-    const bytes = Buffer.from(JSON.stringify(root)),
+    let bytes = Buffer.from(JSON.stringify(root)),
       snapshot = store.logical(bytes);
+    if (fs.existsSync(store.file("snapshot", snapshot)))
+      try {
+        store.read("snapshot", snapshot);
+      } catch {
+        bytes = Buffer.concat([
+          bytes,
+          Buffer.from(
+            "\n" +
+              [...randomBytes(16)]
+                .map((x) =>
+                  x
+                    .toString(2)
+                    .padStart(8, "0")
+                    .replaceAll("0", " ")
+                    .replaceAll("1", "\t"),
+                )
+                .join(""),
+          ),
+        ]);
+        snapshot = store.logical(bytes);
+        invalidObjects++;
+      }
+    onRoot?.(snapshot);
     store.fail("before-root");
     store.write("snapshot", snapshot, bytes);
     store.fail("root-published");
     indexSnapshot(store, index, snapshot);
+    cache.put("root:" + snapshot, {
+      snapshot,
+      observed: fileFingerprint(store.file("snapshot", snapshot)),
+      audited: Date.now(),
+    });
+    cache.commit();
     return {
       ok: true,
       format: 4,
@@ -330,8 +423,16 @@ export async function backupPaged(
       reused_bytes: String(reusedBytes),
       post_commit_verified: true,
       source_modified: false,
+      history_audit: history,
+      history_fully_healthy:
+        history.damaged_roots === 0 &&
+        history.cached_roots === 0 &&
+        invalidObjects === 0,
+      damaged_reuse_candidates: invalidObjects,
+      cleanup_blocked: history.damaged_roots > 0 || invalidObjects > 0,
     };
   } finally {
+    cache?.close();
     store.core("close", { session: ledger });
     store.core("close", { session: hashSession });
     store.core("close", { session: chunkSession });

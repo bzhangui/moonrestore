@@ -6,6 +6,8 @@ import { core, openHost, drill, options, removeOwned } from "./maintenance.mjs";
 import { checked, mkdirPrivate, stateHome } from "./vault.mjs";
 import { activity, checkpoint, credentials } from "./activity.mjs";
 import { verifySqliteRecovery } from "./sqlite-recovery.mjs";
+import { repositoryKind } from "./repository-kind.mjs";
+import { runEngine } from "./engine-client.mjs";
 
 export async function sqliteBackup(
   repository,
@@ -31,14 +33,17 @@ export async function sqliteBackup(
     process.platform === "win32" ? database.toLowerCase() : database;
   if (source === root || source.startsWith(root + path.sep))
     throw new Error("Database cannot be inside its backup repository");
-  const host = openHost(repository, {
-    environment: {
-      ...process.env,
-      ...credentials(repository),
-      MOONRESTORE_READ_ONLY: "1",
-    },
-  });
-  host.clean();
+  const host = repositoryKind(repository).paged
+    ? null
+    : openHost(repository, {
+        environment: {
+          ...process.env,
+          ...credentials(repository),
+          MOONRESTORE_READ_ONLY: "1",
+        },
+      });
+  if (host) host.clean();
+  else await runEngine("capabilities", { repository });
   const parent = mkdirPrivate(path.join(stateHome(), "application-staging"));
   const owned = fs.mkdtempSync(path.join(parent, "sqlite-stage-")),
     output = path.join(owned, "database.sqlite");
