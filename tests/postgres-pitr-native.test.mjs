@@ -35,7 +35,8 @@ test(
       wal = path.join(f.base, "wal"),
       p = await port(),
       restoredPort = await port();
-    let started = false;
+    let started = false,
+      phase = "initialize";
     const environment = postgresEnvironment({
         host: "127.0.0.1",
         port: p,
@@ -72,6 +73,7 @@ test(
         "start",
       ]);
       started = true;
+      phase = "source-ready";
       await run("psql", [
         "-X",
         "-v",
@@ -88,6 +90,7 @@ test(
         port: p,
         maxBytes: 1073741824,
       });
+      phase = "base-verified";
       assert.equal(base.native_client_executed, true);
       await run("psql", [
         "-X",
@@ -130,6 +133,7 @@ test(
         if (/^[A-F0-9]{24}$/.test(name) && name !== active)
           archiveWal(wal, name, path.join(source, "pg_wal", name));
       const target = path.join(f.base, "isolated");
+      phase = "isolated-recovery";
       const result = await pitrDrill(repo, base.snapshot, target, {
         bin,
         walArchive: wal,
@@ -158,6 +162,25 @@ test(
         ]),
         "3",
       );
+    } catch (error) {
+      console.error("Synthetic PITR failure phase: " + phase);
+      const log = path.join(f.base, "isolated", "isolated-server.log");
+      if (fs.existsSync(log)) {
+        const text = fs.readFileSync(log, "utf8").slice(-65536);
+        for (const reason of [
+          "invalid permissions",
+          "recovery ended before configured recovery target was reached",
+          "could not open file",
+          "could not restore file",
+          "unrecognized configuration parameter",
+          "invalid value for parameter",
+          "Permission denied",
+          "has been changed on the primary server",
+        ])
+          if (text.includes(reason))
+            console.error("Synthetic server failure class: " + reason);
+      }
+      throw error;
     } finally {
       if (started || fs.existsSync(path.join(source, "postmaster.pid")))
         await run("pg_ctl", ["-D", source, "-w", "-m", "fast", "stop"]);

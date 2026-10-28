@@ -34,6 +34,7 @@ export function physicalClient(
       windowsHide: true,
     });
     let output = "",
+      diagnostic = "",
       used = 0,
       failed = false;
     child.stdout.on("data", (b) => {
@@ -45,6 +46,8 @@ export function physicalClient(
     });
     child.stderr.on("data", (b) => {
       used += b.length;
+      if (diagnostic.length < 16384)
+        diagnostic += b.toString("utf8").slice(0, 16384 - diagnostic.length);
       if (used > 1048576) {
         failed = true;
         child.kill();
@@ -54,13 +57,44 @@ export function physicalClient(
       failed = true;
     });
     child.on("close", (code) => {
-      if (failed || code !== 0)
+      if (failed || code !== 0) {
+        const tool = path.basename(exe).replace(/\.exe$/i, ""),
+          known = [
+            "psql",
+            "pg_basebackup",
+            "pg_verifybackup",
+            "pg_ctl",
+            "pg_waldump",
+            "initdb",
+          ].includes(tool)
+            ? tool
+            : "client";
+        const reason =
+          [
+            "invalid permissions",
+            "recovery ended before configured recovery target was reached",
+            "could not open file",
+            "could not restore file",
+            "WAL parsing failed",
+            "could not find any WAL file",
+            "checksum mismatch",
+            "invalid backup manifest",
+            "unrecognized configuration parameter",
+            "invalid value for parameter",
+            "Permission denied",
+          ].find((text) => diagnostic.includes(text)) ?? "unclassified";
         reject(
           new Error(
-            "Physical PostgreSQL client failed or exceeded budget; private server diagnostics are not exported",
+            "Physical PostgreSQL " +
+              known +
+              " failed (exit " +
+              code +
+              ", " +
+              reason +
+              "); raw diagnostics withheld",
           ),
         );
-      else resolve(output.trim());
+      } else resolve(output.trim());
     });
   });
 }
