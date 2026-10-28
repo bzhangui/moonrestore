@@ -72,3 +72,12 @@ pub extend Snapshot with @debug.Debug::{to_repr}
 
 ///|
 pub extend Change with @debug.Debug::{to_repr}
+
+///|
+pub extend PagedRecord with ToJson::{to_json}
+
+///|
+pub extend PagedRecord with @json.FromJson::{from_json}
+
+///|
+pub extend PagedRecord with @debug.Debug::{to_repr}

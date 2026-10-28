@@ -52,6 +52,8 @@ pub fn valid_id(String) -> Bool
 
 pub fn validate_checkpoint_entry(Entry, ChunkConfig, Limits) -> Unit raise
 
+pub fn validate_page_link(Int, String, Int, Int) -> Unit raise
+
 pub fn validate_path(String) -> Unit raise BackupError
 
 pub fn verification_batch(Snapshot, Int, Int, Int64) -> VerificationBatch raise BackupError
@@ -155,6 +157,30 @@ pub fn Limits::to_json(Self) -> Json
 pub fn Limits::to_repr(Self) -> @debug.Repr
 pub fn Limits::validate(Self) -> Unit raise BackupError
 pub fn Limits::validate_for_format(Self, Int) -> Unit raise BackupError
+
+pub struct PagedLedger {
+  mut entries : Int64
+  mut chunks : Int64
+  mut total : Int64
+  mut active : Bool
+  mut expected : Int64
+  mut seen : Int64
+}
+pub fn PagedLedger::accept(Self, PagedRecord) -> Unit raise
+pub fn PagedLedger::finish(Self, Int64, Int64, Int64) -> Unit raise
+pub fn PagedLedger::new() -> Self
+
+pub(all) struct PagedRecord {
+  kind : String
+  path : String
+  id : String
+  size : Int64
+  pack : String
+  offset : Int
+} derive(ToJson, @debug.Debug, @json.FromJson)
+pub fn PagedRecord::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn PagedRecord::to_json(Self) -> Json
+pub fn PagedRecord::to_repr(Self) -> @debug.Repr
 
 pub(all) struct RecoveryGoal {
   evidence_current : Bool

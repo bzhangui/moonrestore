@@ -1,0 +1,9 @@
+import {
+  "bzhangui/moonrestore/core" @backup,
+  "moonbitlang/core/json",
+  "moonbitlang/x/crypto",
+}
+
+pkgtype(kind: "executable")
+
+supported_targets = "+js"
