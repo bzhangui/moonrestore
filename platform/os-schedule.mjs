@@ -1,8 +1,10 @@
 // Current-user interactive Windows task. Preview is read-only; installation is
 // explicit and never replaces an existing task. No password or elevation prompt.
 import path from "node:path";
+import fs from "node:fs";
+import { randomUUID } from "node:crypto";
 import { spawnSync } from "node:child_process";
-import { stateHome } from "./vault.mjs";
+import { checked, mkdirPrivate, readPrivate, stateHome, writePrivate } from "./vault.mjs";
 import { hash, cli } from "./maintenance.mjs";
 import { utf8JsonScript } from "./system.mjs";
 const xml = (value) =>
@@ -52,69 +54,86 @@ export function taskPreview(id, intervalMinutes, kind = "job") {
     home,
     credentials_included: false,
     registered: false,
+    format: 1,
+    id,
+    kind,
+    interval_minutes: intervalMinutes,
+    start_boundary: start,
+    arguments: argumentsText,
+    executable: process.execPath,
+    working_directory: path.dirname(path.dirname(cli)),
   };
 }
-export function installTask(preview, confirmation) {
-  if (process.platform !== "win32")
-    throw new Error(
-      "Automatic OS registration currently supports Windows only",
-    );
-  if (
-    !/^MoonRestore-[a-f0-9]{20}$/.test(preview.task) ||
-    confirmation !== preview.task
-  )
-    throw new Error("Confirm the exact preview task name");
-  // Require a responsive read-only RPC before any registration attempt.
-  const health = spawnSync(
-    "powershell.exe",
-    [
-      "-NoProfile",
-      "-NonInteractive",
-      "-Command",
-      "$ErrorActionPreference='Stop';$s=New-Object -ComObject 'Schedule.Service';$s.Connect();$null=$s.GetRunningTasks(0).Count;Write-Output 'scheduler-responsive'",
-    ],
-    { encoding: "utf8", timeout: 5000, windowsHide: true, shell: false },
-  );
-  if (
-    health.error ||
-    health.status !== 0 ||
-    health.stdout.trim() !== "scheduler-responsive"
-  )
-    throw new Error(
-      "Windows scheduler health check timed out or failed; registration was not attempted",
-    );
-  const script =
-    "$ErrorActionPreference='Stop';try{$v=[Console]::In.ReadToEnd()|ConvertFrom-Json;$sid=[Security.Principal.WindowsIdentity]::GetCurrent().User.Value;$s=New-Object -ComObject 'Schedule.Service';$s.Connect();$folder=$s.GetFolder('\\');$xml=$v.xml.Replace('{{SID}}',$sid);$folder.RegisterTask($v.task,$xml,2,$sid,$null,3,$null)|Out-Null}catch{@{code=$_.Exception.HResult.ToString('X8')}|ConvertTo-Json -Compress;exit 1}";
-  const r = spawnSync(
-    "powershell.exe",
-    ["-NoProfile", "-NonInteractive", "-Command", utf8JsonScript(script)],
-    {
-      input: JSON.stringify(preview),
-      encoding: "utf8",
-      timeout: 30000,
-      windowsHide: true,
-      shell: false,
-    },
-  );
-  if (r.error || r.status !== 0) {
-    let code =
-      r.error?.code === "ETIMEDOUT"
-        ? "timeout_registration_unconfirmed"
-        : "unavailable";
-    try {
-      const record = JSON.parse((r.stdout || "").replace(/^\uFEFF/, ""));
-      if (/^[A-Fa-f0-9]{8}$/.test(record.code)) code = record.code;
-    } catch {}
-    throw new Error(
-      "OS schedule registration not confirmed; inspect this exact preview task before retrying; code=" +
-        code,
-    );
-  }
-  return {
-    ok: true,
-    task: preview.task,
-    registered: true,
-    current_user_session_required: true,
-    gui_required: false,
+function schedulerRpc(action, request) {
+  if(process.platform!=="win32")throw new Error("Windows scheduler only");
+  const scripts={
+    query: "$v=[Console]::In.ReadToEnd()|ConvertFrom-Json;$s=New-Object -ComObject 'Schedule.Service';$s.Connect();try{$t=$s.GetFolder('\\').GetTask($v.task)}catch{if($_.Exception.HResult -eq -2147024894 -or $_.Exception.HResult -eq -2147216625){@{state='absent'}|ConvertTo-Json -Compress;exit 0};throw};$d=$t.Definition;@{state='present';description=$d.RegistrationInfo.Description;executable=$d.Actions.Item(1).Path;arguments=$d.Actions.Item(1).Arguments;working_directory=$d.Actions.Item(1).WorkingDirectory;actions=$d.Actions.Count;triggers=$d.Triggers.Count;interval=$d.Triggers.Item(1).Repetition.Interval;sid=$d.Principal.UserId;current_sid=[Security.Principal.WindowsIdentity]::GetCurrent().User.Value;enabled=$t.Enabled;running=($t.State -eq 4)}|ConvertTo-Json -Compress",
+    register: "$v=[Console]::In.ReadToEnd()|ConvertFrom-Json;$sid=[Security.Principal.WindowsIdentity]::GetCurrent().User.Value;$s=New-Object -ComObject 'Schedule.Service';$s.Connect();$s.GetFolder('\\').RegisterTask($v.task,$v.xml.Replace('{{SID}}',$sid),2,$sid,$null,3,$null)|Out-Null;@{completed=$true}|ConvertTo-Json -Compress",
+    disable: "$v=[Console]::In.ReadToEnd()|ConvertFrom-Json;$s=New-Object -ComObject 'Schedule.Service';$s.Connect();$t=$s.GetFolder('\\').GetTask($v.task);$d=$t.Definition;if($d.Actions.Count -ne 1 -or $d.RegistrationInfo.Description -ne $v.description -or $d.Actions.Item(1).Path -ne $v.executable -or $d.Actions.Item(1).Arguments -cne $v.arguments -or $d.Principal.UserId -ne [Security.Principal.WindowsIdentity]::GetCurrent().User.Value){throw 'identity mismatch'};$t.Enabled=$false;@{completed=$true}|ConvertTo-Json -Compress",
+    remove: "$v=[Console]::In.ReadToEnd()|ConvertFrom-Json;$s=New-Object -ComObject 'Schedule.Service';$s.Connect();$f=$s.GetFolder('\\');$t=$f.GetTask($v.task);$d=$t.Definition;if($d.Actions.Count -ne 1 -or $d.RegistrationInfo.Description -ne $v.description -or $d.Actions.Item(1).Path -ne $v.executable -or $d.Actions.Item(1).Arguments -cne $v.arguments -or $d.Principal.UserId -ne [Security.Principal.WindowsIdentity]::GetCurrent().User.Value -or $t.State -eq 4){throw 'identity mismatch or running'};$f.DeleteTask($v.task,0);@{completed=$true}|ConvertTo-Json -Compress",
   };
+  if(!Object.hasOwn(scripts,action))throw new Error("Unsupported scheduler operation");
+  const r=spawnSync(
+    "powershell.exe",
+    ["-NoProfile","-NonInteractive","-Command",utf8JsonScript("$ErrorActionPreference='Stop';"+scripts[action])],
+    {input:JSON.stringify(request),encoding:"utf8",timeout:action==='register'?30000:5000,maxBuffer:65536,windowsHide:true,shell:false},
+  );
+  if(r.error||r.status!==0)throw new Error("Scheduler operation unconfirmed; inspect exact task before retrying");
+  try{return JSON.parse(r.stdout.replace(/^\uFEFF/,''));}catch{throw new Error("Scheduler reply invalid; state unconfirmed");}
+}
+export class TaskController {
+  constructor({rpc=schedulerRpc,controlledSimulation=false}={}){
+    if(rpc!==schedulerRpc&&!controlledSimulation)throw new Error("Custom scheduler requires controlled simulation");
+    this.rpc=rpc;this.simulation=controlledSimulation;
+  }
+  file(task){if(!/^MoonRestore-[a-f0-9]{20}$/.test(task))throw new Error("Invalid exact task name");return path.join(stateHome(),'os-tasks',task+'.json');}
+  save(record){
+    const file=this.file(record.task);mkdirPrivate(path.dirname(file));
+    checked(file,false);if(fs.existsSync(file))readPrivate(file,65536);
+    const temporary=file+'.'+randomUUID()+'.tmp';writePrivate(temporary,JSON.stringify(record));
+    try{fs.renameSync(temporary,file);}finally{if(fs.existsSync(temporary))fs.unlinkSync(temporary);}
+  }
+  load(task){const r=JSON.parse(readPrivate(this.file(task),65536));if(r.format!==1||r.task!==task||r.home!==stateHome())throw new Error("Task intent identity mismatch");return r;}
+  matches(r,q){return q.state==='present'&&q.actions===1&&q.triggers===1&&q.interval===r.interval&&q.sid===q.current_sid&&q.description===r.description&&q.executable===r.executable&&q.arguments===r.arguments&&q.working_directory===r.working_directory&&typeof q.enabled==='boolean'&&typeof q.running==='boolean';}
+  query(r){try{const q=this.rpc('query',r);if(q.state==='absent')return {state:'absent'};if(this.matches(r,q))return {...q,state:'owned'};return {state:'conflict'};}catch{return {state:'unknown'};}}
+  status(task){
+    const r=this.load(task),q=this.query(r);
+    return {ok:q.state!=='unknown'&&q.state!=='conflict',task,state:q.state,registered:q.state==='owned'?true:q.state==='absent'?false:null,enabled:q.enabled??null,running:q.running??null,current_user_session_required:true,controlled_simulation:this.simulation};
+  }
+  install(preview,confirmation){
+    if(confirmation!==preview?.task||preview.format!==1||preview.home!==stateHome())throw new Error("Confirm exact fresh preview task name");
+    const expected=taskPreview(preview.id,preview.interval_minutes,preview.kind);
+    const start=preview.start_boundary;
+    if(typeof start!=='string'||!Number.isFinite(Date.parse(start))||Math.abs(Date.now()-Date.parse(start))>86400000)throw new Error("Expired task preview");
+    if(expected.task!==preview.task||expected.xml.replace(expected.start_boundary,start)!==preview.xml)throw new Error("Task preview changed; regenerate preview");
+    const r={format:1,task:expected.task,home:stateHome(),description:'MoonRestore explicit current-user '+preview.kind,executable:expected.executable,arguments:expected.arguments,working_directory:expected.working_directory,interval:'PT'+preview.interval_minutes+'M',phase:'prepared',updated:new Date().toISOString()};
+    const existing=fs.existsSync(this.file(r.task))?this.load(r.task):null;
+    if(existing&&['executable','arguments','working_directory','description','interval'].some(k=>existing[k]!==r[k]))throw new Error("Task intent conflict; explicitly reconcile old task");
+    const q=this.query(r);
+    if(q.state==='owned'){this.save({...r,phase:'confirmed'});return {ok:true,task:r.task,state:'owned',registered:true,enabled:q.enabled,idempotent:true,current_user_session_required:true,controlled_simulation:this.simulation};}
+    if(q.state!=='absent')throw new Error("Scheduler task conflict or state unconfirmed; registration was not attempted");
+    this.save({...r,phase:'attempted'});
+    try{this.rpc('register',{...r,xml:preview.xml});}catch{}
+    const after=this.query(r);this.save({...r,phase:after.state==='owned'?'confirmed':'unconfirmed'});
+    if(after.state!=='owned')throw new Error("OS schedule registration not confirmed; inspect exact task before retrying");
+    return {ok:true,task:r.task,registered:true,idempotent:false,current_user_session_required:true,gui_required:false,controlled_simulation:this.simulation};
+  }
+  change(task,confirmation,action){
+    if(confirmation!==task||!['disable','remove'].includes(action))throw new Error("Confirm exact owned task action");
+    const r=this.load(task),before=this.query(r);
+    if(before.state==='absent')return {ok:true,task,state:'absent',registered:false};
+    if(before.state!=='owned'||action==='remove'&&before.running)throw new Error("Owned non-running task required; operation not attempted");
+    this.save({...r,phase:action+'_attempted'});try{this.rpc(action,r);}catch{}
+    const q=this.query(r),ok=action==='remove'?q.state==='absent':q.state==='owned'&&q.enabled===false;
+    this.save({...r,phase:ok?action+'_confirmed':'unconfirmed'});
+    if(!ok)throw new Error("Task change not confirmed; preserve task intent and inspect exact identity");
+    return {ok:true,task,state:q.state,registered:q.state==='owned',enabled:q.enabled??null};
+  }
+}
+export function installTask(preview,confirmation){return new TaskController().install(preview,confirmation);}
+export function taskControlCommand(args){
+  const [command,task,flag,confirmation,...rest]=args;
+  if(!['os-task-status','os-task-disable','os-task-remove'].includes(command))return null;
+  if(rest.length||command==='os-task-status'&&flag!==undefined||command!=='os-task-status'&&(flag!=='--confirm'||confirmation!==task))throw new Error("Expected exact task and confirmation");
+  const controller=new TaskController();return command==='os-task-status'?controller.status(task):controller.change(task,confirmation,command==='os-task-disable'?'disable':'remove');
 }
