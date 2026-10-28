@@ -56,9 +56,13 @@ pub fn valid_id(String) -> Bool
 
 pub fn validate_checkpoint_entry(Entry, ChunkConfig, Limits) -> Unit raise
 
+pub fn validate_fidelity_policy(String, String, String, Bool) -> Unit raise
+
 pub fn validate_page_link(Int, String, Int, Int) -> Unit raise
 
 pub fn validate_path(String) -> Unit raise BackupError
+
+pub fn validate_restore_prefix(Int64, Int64, Int64) -> Unit raise
 
 pub fn verification_batch(Snapshot, Int, Int, Int64) -> VerificationBatch raise BackupError
 

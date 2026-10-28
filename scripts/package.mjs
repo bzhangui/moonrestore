@@ -68,6 +68,9 @@ const files = [
   "platform/paged-cache.mjs",
   "platform/paged-journal.mjs",
   "platform/paged-selection.mjs",
+  "platform/paged-restore.mjs",
+  "platform/private-operation.mjs",
+  "platform/fidelity.mjs",
   "platform/paged-service.mjs",
   "platform/paged-compat.mjs",
   "platform/paged-copy.mjs",
@@ -130,7 +133,11 @@ const files = [
   "docs/FAULT_MATRIX_0_8.md",
   "docs/UPGRADE_0_9.md",
   "docs/RELIABILITY_0_9.md",
+  "docs/RELIABILITY_0_10.md",
 ];
+files.push(
+  "_build/host/" + (process.platform === "win32" ? "fidelity.exe" : "fidelity"),
+);
 if (process.platform !== "win32") files.push("_build/host/rename_noreplace");
 if (embedded)
   files.push(

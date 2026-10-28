@@ -21,6 +21,9 @@ fn help() -> String {
     #|  os-task-status EXACT_TASK | os-task-disable EXACT_TASK --confirm EXACT_TASK
     #|  os-task-remove EXACT_TASK --confirm EXACT_TASK  Only owned non-running tasks
     #|  paged-init NEW_REPO [--encrypted]        Explicit format 4, old formats unchanged
+    #|  fidelity-init NEW_REPO [--encrypted]     Explicit format 5 native metadata, no in-place migration
+    #|  paged-restore-create REPO ID NEW_TARGET --confirm NEW_TARGET [--permissions --metadata native|portable]
+    #|  paged-restore-run REPO UUID [--recover] | paged-restore-status REPO UUID
     #|  paged-backup REPO SOURCE [--exclude PREFIX --label TEXT] | paged-verify REPO ID
     #|  paged-restore REPO ID NEW_TARGET --confirm NEW_TARGET [--permissions]
     #|  paged-migrate OLD_REPO OLD_ID NEW_REPO --confirm NEW_REPO [--encrypted]
@@ -140,7 +143,7 @@ pub fn run(args : Array[String]) -> Unit raise {
     return
   }
   if args[0] == "version" {
-    println("MoonRestore 0.9.0")
+    println("MoonRestore 0.10.0")
     return
   }
   if args[0] == "operation-transition" {

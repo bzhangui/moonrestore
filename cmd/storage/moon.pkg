@@ -1,4 +1,5 @@
 import {
+  "moonbitlang/core/encoding/utf8",
   "bzhangui/moonrestore/core" @backup,
   "moonbitlang/core/json",
   "moonbitlang/x/crypto",

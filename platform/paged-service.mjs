@@ -65,7 +65,7 @@ async function inventory(repository) {
     }
     return {
       ok: damaged === 0,
-      format: 4,
+      format: store.format ?? 4,
       snapshots,
       damaged_roots: damaged,
       content_verified: false,
@@ -302,7 +302,7 @@ async function history(
           label: r.label,
           entries: r.entries,
           bytes: r.bytes,
-          format: 4,
+          format: store.format ?? 4,
           metadata_verified: true,
           content_verified: false,
         });
@@ -310,7 +310,7 @@ async function history(
     }
     return {
       ok: damaged === 0,
-      format: 4,
+      format: store.format ?? 4,
       total,
       offset,
       snapshots,
@@ -332,7 +332,7 @@ async function plan(repository, source, excludes = []) {
       files: r.files,
       logical_bytes: r.logical_bytes,
       inventory: r.digest,
-      format: 4,
+      format: store.format ?? 4,
     };
   } finally {
     store.close();
@@ -347,9 +347,11 @@ async function drill(repository, snapshot, { prefix = "" } = {}) {
     const prefixes = prefix ? [prefix] : [],
       preview = await previewPagedRestore(repository, snapshot, target, {
         prefixes,
+        metadataMode: "portable",
       });
     result = await restorePagedSelection(repository, snapshot, target, {
       prefixes,
+      metadataMode: "portable",
       confirmation: preview.confirmation,
     });
     return {
@@ -419,6 +421,42 @@ async function key(repository, action, p) {
 }
 export async function engineAction(action, p) {
   switch (action) {
+    case "fidelity-init":
+      fields(p, ["repository", "encrypted"]);
+      return PagedStore.create(p.repository, {
+        encrypted: flag(p.encrypted),
+        fidelity: true,
+      });
+    case "restore-create":
+      fields(p, [
+        "repository",
+        "snapshot",
+        "target",
+        "selections",
+        "partial",
+        "permissions",
+        "metadataMode",
+        "confirmation",
+      ]);
+      return import("./paged-restore.mjs").then((m) =>
+        m.createPagedRestore(p.repository, p.snapshot, p.target, {
+          prefixes: p.selections ?? [],
+          partial: flag(p.partial),
+          permissions: flag(p.permissions),
+          metadataMode: p.metadataMode,
+          confirmation: p.confirmation,
+        }),
+      );
+    case "restore-run":
+      fields(p, ["repository", "id", "recover"]);
+      return import("./paged-restore.mjs").then((m) =>
+        m.runPagedRestore(p.repository, p.id, { recover: flag(p.recover) }),
+      );
+    case "restore-status":
+      fields(p, ["repository", "id"]);
+      return import("./paged-restore.mjs").then((m) =>
+        m.pagedRestoreStatus(p.repository, p.id),
+      );
     case "scrub":
     case "scrub-status":
       fields(p, [
@@ -445,8 +483,10 @@ export async function engineAction(action, p) {
           return {
             ok: true,
             protocol: 1,
-            format: 4,
+            format: store.format ?? 4,
             selected_restore: true,
+            resumable_restore: "verified_owned_prefix",
+            fidelity_format: store.format === 5,
             partial_rescue: true,
             resumable_backup: "rescan_verified_reuse",
             encrypted: !!store.key,
@@ -454,19 +494,38 @@ export async function engineAction(action, p) {
             maximum_snapshot_bytes: "1099511627776",
             maximum_file_bytes: "68719476736",
             budgets_not_scale_certification: true,
-            metadata_profile: [
-              "file_bytes",
-              "relative_paths",
-              "mtime",
-              "optional_posix_modes",
-            ],
-            not_preserved: [
-              "ACL",
-              "ADS",
-              "xattr",
-              "sparse_extents",
-              "hardlink_relationships",
-            ],
+            metadata_profile:
+              store.format === 5
+                ? [
+                    "file_bytes",
+                    "relative_paths",
+                    "nanosecond_times",
+                    "native_acl_or_xattr",
+                    "ads_on_windows",
+                    "sparse_ranges",
+                    "selected_internal_hardlinks",
+                  ]
+                : [
+                    "file_bytes",
+                    "relative_paths",
+                    "mtime",
+                    "optional_posix_modes",
+                  ],
+            not_preserved:
+              store.format === 5
+                ? [
+                    "ctime",
+                    "posix_birthtime_restore",
+                    "all_filesystem_metadata",
+                    "bit_identical_physical_layout",
+                  ]
+                : [
+                    "ACL",
+                    "ADS",
+                    "xattr",
+                    "sparse_extents",
+                    "hardlink_relationships",
+                  ],
             physical_power_loss_verified: false,
           };
         } finally {
@@ -600,7 +659,7 @@ export async function engineAction(action, p) {
             ok: failed === 0,
             checked_snapshots: count,
             failed_snapshots: failed,
-            format: 4,
+            format: store.format ?? 4,
           };
         } finally {
           store.close();
@@ -632,11 +691,13 @@ export async function engineAction(action, p) {
         "selections",
         "restoreModes",
         "partial",
+        "metadataMode",
       ]);
       return previewPagedRestore(p.repository, p.snapshot, p.target, {
         prefixes: p.selections ?? (p.prefix ? [p.prefix] : []),
         partial: flag(p.partial),
         permissions: flag(p.restoreModes),
+        metadataMode: p.metadataMode,
       });
     case "restore":
       fields(p, [
@@ -648,11 +709,13 @@ export async function engineAction(action, p) {
         "restoreModes",
         "partial",
         "confirmation",
+        "metadataMode",
       ]);
       return restorePagedSelection(p.repository, p.snapshot, p.target, {
         prefixes: p.selections ?? (p.prefix ? [p.prefix] : []),
         partial: flag(p.partial),
         permissions: flag(p.restoreModes),
+        metadataMode: p.metadataMode,
         confirmation: p.confirmation,
       });
     case "restore-direct":

@@ -426,6 +426,7 @@ export async function startWorkbench({
           "selections",
           "restoreModes",
           "partial",
+          "metadataMode",
         ]);
         const result = await restorePlan(p);
         delete result.plan;
@@ -441,6 +442,7 @@ export async function startWorkbench({
           "confirmation",
           "restoreModes",
           "partial",
+          "metadataMode",
         ]);
         return restoreSelected(p);
       case "report":

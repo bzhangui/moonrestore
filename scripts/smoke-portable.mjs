@@ -243,6 +243,28 @@ try {
   );
   assert.equal(run(["paged-gc", paged]).candidates, 0);
   assert.equal(run(["paged-capabilities", paged]).protocol, 1);
+  const fidelity = path.join(root, "fidelity"),
+    fidelityTarget = path.join(root, "fidelity-restored");
+  run(["fidelity-init", fidelity, "--encrypted"]);
+  const fb = run(["backup", fidelity, source]);
+  assert.equal(fb.format, 5);
+  const fr = run([
+    "restore-resumable",
+    fidelity,
+    fb.snapshot,
+    fidelityTarget,
+    "--permissions",
+  ]);
+  assert.equal(fr.metadata_profile_verified, true);
+  assert.equal(fr.all_filesystem_metadata_preserved, false);
+  assert.equal(
+    run(["paged-restore-status", fidelity, fr.operation]).complete,
+    true,
+  );
+  assert.equal(
+    fs.readFileSync(path.join(fidelityTarget, "sample.txt"), "utf8"),
+    "controlled portable backup",
+  );
   const shared = run(["backup", paged, source]),
     chosen = path.join(root, "paged-chosen"),
     chosenPreview = run([
@@ -342,6 +364,7 @@ try {
       readiness_and_safe_state_migration: true,
       sqlite_recovery_reopened: true,
       paged_encrypted_backup_and_restore: true,
+      fidelity_native_and_resumable_restore: true,
     }),
   );
 } finally {

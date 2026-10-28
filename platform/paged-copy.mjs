@@ -218,6 +218,10 @@ export async function rebuildPaged(
   let stage, temporary;
   try {
     store.lock();
+    if (store.format === 5)
+      throw new Error(
+        "Fidelity rebuild/rekey requires a byte-preserving metadata rewrite; use verified paged-replica. Filesystem round-trip rebuild would change recorded metadata.",
+      );
     if (snapshots === undefined) {
       snapshots = [];
       for (const id of store.snapshots()) {

@@ -67,6 +67,7 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
   versionCheck();
   run(moon, ["update"]);
   run(moon, ["build", "--target", "js", "--release", "--deny-warn"]);
+  run(process.execPath, ["scripts/build-fidelity.mjs"]);
   if (process.platform !== "win32") {
     const dir = path.join(project, "_build", "host");
     fs.mkdirSync(dir, { recursive: true });

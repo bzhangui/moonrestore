@@ -1,5 +1,7 @@
 # 来源、复用与许可证
 
+0.10新增 `platform/windows/Fidelity.cs` 和 `platform/fidelity-posix.c` 为项目原创Apache-2.0代码，仅调用系统.NET/Win32、POSIX xattr/ACL/utimensat/SEEK_DATA/HOLE，不内嵌或分发系统DLL，不启用特权。参考 [Windows文件流](https://learn.microsoft.com/en-us/windows/win32/fileio/file-streams)、[稀疏文件操作](https://learn.microsoft.com/en-us/windows/win32/fileio/sparse-file-operations)、[Linux lseek](https://man7.org/linux/man-pages/man2/lseek.2.html) 与 [Apple getxattr](https://developer.apple.com/library/archive/documentation/System/Conceptual/ManPages_iPhoneOS/man2/getxattr.2.html) 的接口说明，未复制其实现。系统报告的分配范围不等于物理块布局认证。无新增npm运行依赖，许可证/NOTICE及原有第三方归属不变。
+
 0.9新增持久HMAC/加密提示、认证日志、SQLite游标、分页远端、保留/重建、WAL诊断和告警适配均为本项目代码，使用已有Node标准crypto/SQLite/HTTP接口，无新增npm运行依赖。WAL连续性/历史文件依据 [PostgreSQL16连续归档文档](https://www.postgresql.org/docs/16/continuous-archiving.html)，任务身份依据 [Microsoft任务安全上下文](https://learn.microsoft.com/en-us/windows/win32/taskschd/security-contexts-for-running-tasks)；仅参考协议/系统文档，不复制其实现，不把参考当认证。
 
 | 组件 | 来源与版本 | 使用方式 | 许可 |

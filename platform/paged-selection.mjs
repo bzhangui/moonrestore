@@ -33,7 +33,7 @@ export function* pagedRecords(store, index, root) {
       yield r;
     }
 }
-function assess(store, index, snapshot, prefixes) {
+export function assess(store, index, snapshot, prefixes) {
   const root = indexSnapshot(store, index, snapshot, {
       verifyContents: false,
       verifyObjects: false,
@@ -124,12 +124,12 @@ function assess(store, index, snapshot, prefixes) {
     store.core("close", { session: health });
   }
 }
-function selected(index, p) {
+export function selected(index, p) {
   const key = index.key("selection", p),
     r = index.db.prepare("SELECT payload FROM selected WHERE k=?").get(key);
   return r ? index.decode("selection", key, r.payload) : null;
 }
-function targetIdentity(store, target) {
+export function targetIdentity(store, target) {
   const full = checked(target, false),
     parent = checked(path.dirname(full)),
     a = normalize(store.repo),
@@ -153,6 +153,7 @@ function token(
   partial,
   permissions,
   result,
+  metadataMode,
 ) {
   return store.logical(
     Buffer.from(
@@ -164,6 +165,7 @@ function token(
         prefixes,
         partial,
         permissions,
+        metadataMode,
         health: result.health,
         files: result.files,
         bad: result.bad,
@@ -181,6 +183,7 @@ export async function previewPagedRestore(
     prefixes = [],
     partial = false,
     permissions = false,
+    metadataMode,
     environment = process.env,
   } = {},
 ) {
@@ -189,9 +192,27 @@ export async function previewPagedRestore(
   const store = await PagedStore.open(repository, { environment }),
     index = new PagedIndex(store);
   try {
+    metadataMode ??= store.format === 5 ? "native" : "basic";
+    if (
+      !["basic", "portable", "native"].includes(metadataMode) ||
+      (store.format === 5 && metadataMode === "basic") ||
+      (metadataMode === "native" && (!permissions || store.format !== 5))
+    )
+      throw new Error(
+        "Native metadata requires explicit permissions and a fidelity snapshot; choose portable explicitly for lossy restore",
+      );
     const list = selectionPrefixes(store, prefixes),
       destination = targetIdentity(store, target),
       r = assess(store, index, snapshot, list);
+    store.core(
+      "fidelity-policy",
+      {
+        session: r.root.fidelity?.platform ?? process.platform,
+        previous: process.platform,
+        count: permissions ? 1 : 0,
+      },
+      Buffer.from(metadataMode),
+    );
     if (r.bad && !partial)
       throw new Error(
         "Selected files damaged; explicit partial rescue required",
@@ -199,7 +220,7 @@ export async function previewPagedRestore(
     return {
       ok: true,
       preview: true,
-      format: 4,
+      format: store.format ?? 4,
       snapshot,
       files: r.files,
       damaged_files: r.bad,
@@ -213,9 +234,12 @@ export async function previewPagedRestore(
         partial,
         permissions,
         r,
+        metadataMode,
       ),
       overwrites_existing_data: false,
       partial_rescue: partial,
+      metadata_profile: metadataMode,
+      metadata_lossy: metadataMode !== "native",
     };
   } finally {
     index.close();
@@ -230,6 +254,7 @@ export async function restorePagedSelection(
     prefixes = [],
     partial = false,
     permissions = false,
+    metadataMode,
     confirmation,
     environment = process.env,
   } = {},
@@ -242,6 +267,7 @@ export async function restorePagedSelection(
   let stage,
     fd = null;
   try {
+    metadataMode ??= store.format === 5 ? "native" : "basic";
     const list = selectionPrefixes(store, prefixes),
       destination = targetIdentity(store, target),
       r = assess(store, index, snapshot, list);
@@ -250,12 +276,39 @@ export async function restorePagedSelection(
     if (r.bad && !r.files && !r.dirs)
       throw new Error("No healthy selected content; target not created");
     if (
-      token(store, snapshot, destination, list, partial, permissions, r) !==
-      confirmation
+      token(
+        store,
+        snapshot,
+        destination,
+        list,
+        partial,
+        permissions,
+        r,
+        metadataMode,
+      ) !== confirmation
     )
       throw new Error(
         "Restore preview changed; re-preview exact selection and target",
       );
+    if (store.format === 5) {
+      const { createPagedRestore, runPagedRestore } = await import(
+        "./paged-restore.mjs"
+      );
+      const op = await createPagedRestore(repository, snapshot, target, {
+        prefixes: list,
+        partial,
+        permissions,
+        metadataMode,
+        confirmation: target,
+        environment,
+      });
+      return {
+        ...(await runPagedRestore(repository, op.operation, { environment })),
+        partial_rescue: partial,
+        recovered_files: r.files,
+        overwritten: false,
+      };
+    }
     const disk = fs.statfsSync(destination.parent, { bigint: true });
     if (
       disk.bavail * disk.bsize <
@@ -351,7 +404,7 @@ export async function restorePagedSelection(
     syncDirectory(destination.parent);
     return {
       ok: r.bad === 0,
-      format: 4,
+      format: store.format ?? 4,
       snapshot,
       target: destination.full,
       complete: r.bad === 0,
@@ -415,7 +468,7 @@ export async function catalogPaged(
         });
     return {
       ok: true,
-      format: 4,
+      format: store.format ?? 4,
       snapshot,
       entries: items,
       total,

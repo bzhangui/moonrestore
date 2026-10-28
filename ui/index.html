@@ -479,8 +479,7 @@
         >
         <template id="restore-extra-template"
           ><label class="check"
-            ><input id="restore-modes" type="checkbox" />显式恢复 POSIX
-            基础权限（Windows 不恢复 ACL；默认只恢复修改时间）</label
+            ><input id="restore-modes" type="checkbox" />显式允许恢复权限：旧格式为 POSIX 基础权限；format5 同平台恢复 ACL/扩展属性（可能限制访问）。便携有损模式见 CLI 指南。</label
           ><button id="open-restored" type="button" class="secondary" hidden>
             打开恢复目录
           </button></template

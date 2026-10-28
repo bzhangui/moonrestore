@@ -183,6 +183,10 @@ export async function restorePlan(p) {
     selections(p);
     return runEngine("restore-preview", p);
   }
+  if (p.metadataMode !== undefined && p.metadataMode !== "basic")
+    throw new Error(
+      "Native/portable metadata profiles require format4/format5; legacy restore only supports basic metadata",
+    );
   const selected = selections(p),
     repository = checked(p.repository),
     target = checked(p.target, false),

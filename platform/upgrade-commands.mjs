@@ -22,6 +22,10 @@ export async function upgradeCommand(args) {
       "wal-health",
       "plan-runner",
       "alert-deliver",
+      "fidelity-init",
+      "paged-restore-create",
+      "paged-restore-run",
+      "paged-restore-status",
     ].includes(command)
   )
     return null;
@@ -39,9 +43,65 @@ export async function upgradeCommand(args) {
       "cluster",
       "segment-bytes",
       "allow-remote",
+      "encrypted",
+      "permissions",
+      "metadata",
     ],
-    ["plaintext", "recover", "partial", "allow-remote"],
+    [
+      "plaintext",
+      "recover",
+      "partial",
+      "allow-remote",
+      "encrypted",
+      "permissions",
+    ],
   );
+  if (
+    command === "fidelity-init" &&
+    p.length === 1 &&
+    Object.keys(v).every((k) => k === "encrypted")
+  )
+    return runEngine("fidelity-init", {
+      repository: p[0],
+      encrypted: v.encrypted ?? false,
+    });
+  if (
+    command === "paged-restore-create" &&
+    p.length === 3 &&
+    Object.keys(v).every((k) =>
+      ["confirm", "selections", "partial", "permissions", "metadata"].includes(
+        k,
+      ),
+    )
+  )
+    return runEngine("restore-create", {
+      repository: p[0],
+      snapshot: p[1],
+      target: p[2],
+      selections: v.selections
+        ? JSON.parse(readPrivate(v.selections, 32768))
+        : [],
+      partial: v.partial ?? false,
+      permissions: v.permissions ?? false,
+      ...(v.metadata ? { metadataMode: v.metadata } : {}),
+      confirmation: v.confirm,
+    });
+  if (
+    command === "paged-restore-run" &&
+    p.length === 2 &&
+    Object.keys(v).every((k) => k === "recover")
+  )
+    return runEngine("restore-run", {
+      repository: p[0],
+      id: p[1],
+      recover: v.recover ?? false,
+    });
+  if (
+    command === "paged-restore-status" &&
+    p.length === 2 &&
+    !Object.keys(v).length
+  )
+    return runEngine("restore-status", { repository: p[0], id: p[1] });
   if (
     command === "alert-deliver" &&
     p.length === 2 &&
@@ -109,7 +169,9 @@ export async function upgradeCommand(args) {
     ["paged-selected-preview", "paged-selected-restore"].includes(command) &&
     p.length === 3 &&
     Object.keys(v).every((k) =>
-      ["confirm", "selections", "partial"].includes(k),
+      ["confirm", "selections", "partial", "permissions", "metadata"].includes(
+        k,
+      ),
     )
   )
     return runEngine(
@@ -122,6 +184,8 @@ export async function upgradeCommand(args) {
           ? JSON.parse(readPrivate(v.selections, 32768))
           : [],
         partial: v.partial ?? false,
+        restoreModes: v.permissions ?? false,
+        ...(v.metadata ? { metadataMode: v.metadata } : {}),
         ...(v.confirm ? { confirmation: v.confirm } : {}),
       },
       { allowFailure: v.partial === true },

@@ -15,6 +15,7 @@ import {
 import { publishDirectory } from "./adapter.mjs";
 import { core, options, removeOwned } from "./maintenance.mjs";
 import { PagedCache, loadHistory, fileFingerprint } from "./paged-cache.mjs";
+import { FidelityWriter, captureNative, metadataEqual } from "./fidelity.mjs";
 const record = (kind, fields = {}) => ({
   kind,
   path: "",
@@ -75,7 +76,8 @@ export async function backupPaged(
   const hashSession = randomUUID(),
     chunkSession = randomUUID();
   let sourceRoot;
-  let cache,
+  let fidelity,
+    cache,
     history,
     invalidObjects = 0,
     page = [],
@@ -112,6 +114,7 @@ export async function backupPaged(
         );
     }
     store.lock({ operation: operationId });
+    if (store.format === 5) fidelity = new FidelityWriter(store, index);
     cache = new PagedCache(store);
     history = loadHistory(store, index, { cache, full: fullHistory });
     seed?.(index);
@@ -258,6 +261,7 @@ export async function backupPaged(
       if (depth > 64) throw new Error("Paged source depth exceeded");
       const initial = fs.lstatSync(checked(folder), { bigint: true });
       if (!initial.isDirectory()) throw new Error("Source directory changed");
+      const directoryMetadata = fidelity?.add(prefix, folder, initial);
       index.put("source", sourceSequence++, {
         path: prefix,
         stat: statValue(initial),
@@ -275,7 +279,11 @@ export async function backupPaged(
             index.path(relative, "dir");
             enqueue(record("dir", { path: relative, ...attributes(s) }));
             visit(file, relative, depth + 1);
-          } else if (s.isFile() && s.nlink === 1n) {
+          } else if (
+            s.isFile() &&
+            (s.nlink === 1n || (fidelity && s.nlink > 1n))
+          ) {
+            const fileMetadata = fidelity?.add(relative, file, s);
             if (s.size > 68719476736n)
               throw new Error("Paged source file budget");
             index.path(relative, "file");
@@ -337,6 +345,13 @@ export async function backupPaged(
               )
                 throw new Error("Paged source changed while reading");
               enqueue(record("end", { id: digest, size: String(size) }));
+              if (
+                fileMetadata &&
+                !metadataEqual(fileMetadata.native, captureNative(file))
+              )
+                throw new Error(
+                  "Source extended metadata changed while reading",
+                );
             } finally {
               fs.closeSync(fd);
             }
@@ -346,6 +361,11 @@ export async function backupPaged(
       } finally {
         iterator.closeSync();
       }
+      if (
+        directoryMetadata &&
+        !metadataEqual(directoryMetadata.native, captureNative(folder))
+      )
+        throw new Error("Directory extended metadata changed");
     };
     visit(sourceRoot);
     flushPack();
@@ -365,7 +385,7 @@ export async function backupPaged(
       total: String(total),
     });
     const root = {
-      format: 4,
+      format: store.format ?? 4,
       repository: store.repoId,
       created: startedAt ?? new Date().toISOString(),
       label,
@@ -375,6 +395,7 @@ export async function backupPaged(
       chunks,
       bytes: String(total),
       excludes,
+      ...(fidelity ? { fidelity: fidelity.finish() } : {}),
     };
     let bytes = Buffer.from(JSON.stringify(root)),
       snapshot = store.logical(bytes);
@@ -413,7 +434,7 @@ export async function backupPaged(
     cache.commit();
     return {
       ok: true,
-      format: 4,
+      format: store.format ?? 4,
       snapshot,
       entries,
       chunks,
@@ -455,7 +476,7 @@ export async function verifyPaged(
     const root = indexSnapshot(store, index, snapshot);
     return {
       ok: true,
-      format: 4,
+      format: store.format ?? 4,
       snapshot,
       entries: root.entries,
       chunks: root.chunks,
@@ -477,7 +498,7 @@ export async function restorePaged(
   repository,
   snapshot,
   target,
-  { environment = process.env, permissions = false } = {},
+  { environment = process.env, permissions = false, metadataMode } = {},
 ) {
   if (typeof permissions !== "boolean")
     throw new Error("Permissions opt-in must be boolean");
@@ -487,6 +508,18 @@ export async function restorePaged(
   let stage,
     fd = null;
   try {
+    if (store.format === 5) {
+      const { createPagedRestore, runPagedRestore } = await import(
+        "./paged-restore.mjs"
+      );
+      const op = await createPagedRestore(repository, snapshot, target, {
+        permissions,
+        metadataMode,
+        confirmation: target,
+        environment,
+      });
+      return await runPagedRestore(repository, op.operation, { environment });
+    }
     const root = indexSnapshot(store, index, snapshot),
       destination = checked(target, false),
       parent = checked(path.dirname(destination));

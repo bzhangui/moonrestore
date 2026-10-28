@@ -20,6 +20,7 @@ import {
 } from "./vault.mjs";
 import { publishDirectory } from "./adapter.mjs";
 import { checkpoint } from "./activity.mjs";
+import { indexFidelity } from "./fidelity.mjs";
 
 export const PAGE_LIMIT = 262144,
   PACK_LIMIT = 8388608;
@@ -142,9 +143,9 @@ export function syncDirectory(folder) {
 export class PagedStore {
   static async create(
     repository,
-    { encrypted = false, environment = process.env } = {},
+    { encrypted = false, fidelity = false, environment = process.env } = {},
   ) {
-    if (typeof encrypted !== "boolean")
+    if (typeof encrypted !== "boolean" || typeof fidelity !== "boolean")
       throw new Error("Encrypted flag required");
     const target = checked(repository, false),
       parent = checked(path.dirname(target));
@@ -165,9 +166,13 @@ export class PagedStore {
       newFile(
         path.join(stage, "moonrestore"),
         Buffer.from(
-          encrypted
-            ? "moonrestore-paged-encrypted-v4\n"
-            : "moonrestore-paged-repository-v4\n",
+          fidelity
+            ? encrypted
+              ? "moonrestore-fidelity-encrypted-v5\n"
+              : "moonrestore-fidelity-repository-v5\n"
+            : encrypted
+              ? "moonrestore-paged-encrypted-v4\n"
+              : "moonrestore-paged-repository-v4\n",
         ),
       );
       if (vault)
@@ -181,7 +186,7 @@ export class PagedStore {
       return {
         ok: true,
         repository: target,
-        format: 4,
+        format: fidelity ? 5 : 4,
         encrypted,
         legacy_modified: false,
       };
@@ -205,9 +210,11 @@ export class PagedStore {
       ![
         "moonrestore-paged-repository-v4\n",
         "moonrestore-paged-encrypted-v4\n",
+        "moonrestore-fidelity-repository-v5\n",
+        "moonrestore-fidelity-encrypted-v5\n",
       ].includes(magic)
     )
-      throw new Error("Explicit format-4 repository required");
+      throw new Error("Explicit format-4/5 repository required");
     for (const d of ["pages", "packs", "snapshots", "tmp", "trash"])
       if (!fs.lstatSync(checked(path.join(repo, d))).isDirectory())
         throw new Error("Invalid paged layout");
@@ -218,7 +225,9 @@ export class PagedStore {
       ? decodeJson(bounded(path.join(repo, "encryption.json"), 4096))
       : null;
     const key = vault ? unlockVault(vault, environment) : null;
-    return new PagedStore(repo, repoId, core, vault, key);
+    const store = new PagedStore(repo, repoId, core, vault, key);
+    store.format = magic.includes("v5") ? 5 : 4;
+    return store;
   }
   constructor(repo, repoId, core, vault, key) {
     this.repo = repo;
@@ -427,10 +436,12 @@ export class PagedStore {
       "chunks",
       "bytes",
       "excludes",
+      ...(this.format === 5 ? ["fidelity"] : []),
     ];
     if (
       Object.keys(root).some((k) => !keys.includes(k)) ||
-      root.format !== 4 ||
+      root.format !== (this.format ?? 4) ||
+      (this.format === 5 && !root.fidelity) ||
       root.repository !== this.repoId ||
       typeof root.created !== "string" ||
       !Number.isFinite(Date.parse(root.created)) ||
@@ -719,6 +730,7 @@ export function indexSnapshot(
       chunks: String(root.chunks),
       total: root.bytes,
     });
+    if (root.fidelity) indexFidelity(store, index, root);
     return root;
   } finally {
     store.core("close", { session: ledger });

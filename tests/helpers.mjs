@@ -9,8 +9,8 @@ import { fileURLToPath } from 'node:url';
 export const project = fileURLToPath(new URL('../', import.meta.url));
 export const cli = path.join(project,'bin','moonrestore.mjs');
 export const sha = b => createHash('sha256').update(b).digest('hex');
-export function call(args, {env={}, status=0}={}) {
-  const r = spawnSync(process.execPath,[cli,...args],{encoding:'utf8',timeout:30000,env:{...process.env,...env}});
+export function call(args, {env={}, status=0, timeout=30000}={}) {
+  const r = spawnSync(process.execPath,[cli,...args],{encoding:'utf8',timeout,env:{...process.env,...env}});
   assert.equal(r.error, undefined, String(r.error));
   assert.equal(r.status,status,`stdout=${r.stdout}\nstderr=${r.stderr}`);
   if (status !== 0) return r;

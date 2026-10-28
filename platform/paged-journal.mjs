@@ -22,6 +22,7 @@ import { pagedBinding } from "./paged-cache.mjs";
 import { backupPaged, verifyPaged } from "./paged-operations.mjs";
 import { options } from "./maintenance.mjs";
 import { checkpoint } from "./activity.mjs";
+import { captureNative } from "./fidelity.mjs";
 const stat = (s) => ({
   dev: String(s.dev),
   ino: String(s.ino),
@@ -59,7 +60,11 @@ export function sourceInventory(store, source, excludes = []) {
     const before = fs.lstatSync(checked(folder), { bigint: true });
     if (!before.isDirectory()) throw new Error("Source directory changed");
     const k = index.key("inventory", prefix.toLowerCase()),
-      value = { relative: prefix, stat: stat(before) };
+      value = {
+        relative: prefix,
+        stat: stat(before),
+        ...(store.format === 5 ? { native: captureNative(folder) } : {}),
+      };
     index.db
       .prepare("INSERT INTO inventory VALUES(?,?)")
       .run(k, index.encode("inventory", k, value));
@@ -74,7 +79,10 @@ export function sourceInventory(store, source, excludes = []) {
         const file = checked(path.join(folder, d.name)),
           s = fs.lstatSync(file, { bigint: true });
         if (s.isDirectory()) visit(file, r, depth + 1);
-        else if (s.isFile() && s.nlink === 1n) {
+        else if (
+          s.isFile() &&
+          (s.nlink === 1n || (store.format === 5 && s.nlink > 1n))
+        ) {
           if (
             ++count > 1000001 ||
             s.size > 68719476736n ||
@@ -87,7 +95,11 @@ export function sourceInventory(store, source, excludes = []) {
             .prepare("INSERT INTO inventory VALUES(?,?)")
             .run(
               key,
-              index.encode("inventory", key, { relative: r, stat: stat(s) }),
+              index.encode("inventory", key, {
+                relative: r,
+                stat: stat(s),
+                ...(store.format === 5 ? { native: captureNative(file) } : {}),
+              }),
             );
         } else throw new Error("Source inventory links/special files refused");
       }

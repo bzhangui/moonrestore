@@ -4,7 +4,9 @@
 
 [公开源码](https://github.com/bzhangui/moonrestore) · [CI](https://github.com/bzhangui/moonrestore/actions) · [Mooncakes 0.5.0](https://mooncakes.io/docs/bzhangui/moonrestore) · [测试报告](docs/QUALITY_REPORT.md) · [更新记录](CHANGELOG.md)
 
-## 当前源码：0.9.0 开发版；Mooncakes：0.5.0
+## 当前源码：0.10.0 开发版；Mooncakes：0.5.0
+
+0.10增加format4/5恢复写出续作：验证自有暂存前缀后继续、完成文件与整树读回、发布不确定性对账；显式新format5归档原生元数据（Windows ACL/ADS、安全属性、稀疏；POSIX xattr/ACL、uid/gid及精确时间；所选内部硬链接）。原生恢复须同平台、显式允许权限且全部读回通过；便携降级必须明确选择并报告损失，不承诺所有文件系统元数据。见 [0.10使用指南](docs/RELIABILITY_0_10.md)。旧库不原地改写，本轮仅推送源码，不发布Mooncakes/运行包。
 
 使用 `moon add bzhangui/moonrestore@0.5.0` 安装 MoonBit 核心库，包含 0.4/0.5 新增恢复、巡检和操作规则 API；0.3.0 旧包不包含这些接口。CLI/工作台仍需按下文从源码构建，Mooncakes 不是 Windows 桌面二进制下载。[验收进度](docs/ACCEPTANCE.md) 与 [发布记录](docs/PUBLICATION.md) 区分注册表发布、本机、远端及历史结果；以发布记录中的实际查询、哈希与独立消费结果为准。
 
@@ -32,7 +34,7 @@
 | 日常恢复准备 | RPO/演练RTO与缺席判断；离线计划有限展示、显式脱敏心跳、白名单配置迁移，不自动移动密钥 |
 | 远端只读审计 | 固定回执和成员versionId、摘要/大小及可选服务端保留读回；不是明文恢复或真实供应商验证 |
 
-规模上限是拒绝预算，并非性能认证。format4备份续作仍重读源并核验复用对象；恢复写出中断不能直接续写原目标。缓存不授权清理，新备份成功不代表坏历史变健康。真实管理员VSS、独立介质/NAS/跨主机、真实云、物理断电、长期生产和外部用户仍待验证；原生PITR以当前提交专项CI为准。系统任务状态无法确认时不注册、不提权，旧轮待核查资源不擅自处理。旧运输归档、旧游标远端审计及双供体修复尚未通用于format4，替代路径和明确限制见0.9指南。
+规模上限是拒绝预算，并非性能认证。format4备份续作仍重读源并核验复用对象；0.10分页恢复写出可继续经认证且内容匹配的自有暂存前缀，不能接管陌生目标；日志丢失或归属不明拒绝续作。缓存不授权清理，新备份成功不代表坏历史变健康。真实管理员VSS、独立介质/NAS/跨主机、真实云、物理断电、长期生产和外部用户仍待验证；原生PITR以当前提交专项CI为准。系统任务状态无法确认时不注册、不提权，旧轮待核查资源不擅自处理。旧运输归档、旧游标远端审计及双供体修复尚未通用于format4/5，替代路径和明确限制见0.9/0.10指南。
 
 ## 0.5 可靠性入口
 
@@ -50,7 +52,7 @@ node bin/moonrestore.mjs archive-import ARCHIVE EXTERNAL_CHECKSUM NEW_REPO
 
 ## 安装与最小示例
 
-需要 moonc ≥ 0.10.15、Node ≥ 22.16.0（推荐当前 LTS）。Linux/macOS 还需系统 C 工具链用于排他目录提交。无 npm 第三方运行依赖。构建优先用可选 `.local/toolchain`，否则使用系统 SDK；可设 `MOON_BIN` / `MOON_HOME`。
+需要 moonc ≥ 0.10.15、Node ≥ 22.16.0（推荐当前 LTS）。Linux/macOS 还需系统 C 工具链用于排他目录提交和元数据帮助程序；Windows使用系统.NET Framework4.x自带C#编译器构建元数据帮助程序，不提权。无 npm 第三方运行依赖。构建优先用可选 `.local/toolchain`，否则使用系统 SDK；可设 `MOON_BIN` / `MOON_HOME`。
 
 ```sh
 git clone https://github.com/bzhangui/moonrestore.git

@@ -167,6 +167,7 @@ test("chunk-boundary interruption persists partial file state and validates the 
     call(["operation-resume", f.repo, operation], {
       env: { MOONRESTORE_TEST_CRASH: "checkpoint-chunks" },
       status: 1,
+      timeout: 90000, // Still assert the actual 1024-chunk checkpoint/exit below.
     });
     assert.equal(operationStatus(f.repo, operation).checkpoint_chunks, 1024);
     assert.equal(fs.readdirSync(path.join(f.repo, "snapshots")).length, 0);

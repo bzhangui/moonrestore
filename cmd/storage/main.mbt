@@ -54,6 +54,19 @@ fn command(text : String, bytes : Bytes) -> String {
         Json::null()
       }
       "transition" => Json(@backup.operation_transition(r.session, r.previous))
+      "restore-prefix" => {
+        @backup.validate_restore_prefix(r.entries, r.total, r.chunks)
+        Json::null()
+      }
+      "fidelity-policy" => {
+        @backup.validate_fidelity_policy(
+          r.session,
+          r.previous,
+          @utf8.decode(bytes),
+          r.count == 1,
+        )
+        Json::null()
+      }
       "retirement-ready" =>
         Json(@backup.retirement_ready(r.entries, r.total, r.count))
       "retirement-clock" => {

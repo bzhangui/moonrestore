@@ -12,6 +12,7 @@ export async function pagedCompat(args, opts = {}) {
       "audit",
       "list",
       "restore",
+      "restore-resumable",
       "status",
     ].includes(command) ||
     !repository
@@ -42,15 +43,37 @@ export async function pagedCompat(args, opts = {}) {
     if (rest.length) throw new Error("Invalid paged inventory arguments");
     return runEngine("inventory", { repository }, opts);
   }
-  const { positionals: p, values: v } = options(rest, ["prefix"]);
+  const { positionals: p, values: v } = options(
+    rest,
+    ["prefix", "permissions", "metadata"],
+    ["permissions"],
+  );
   if (p.length !== 2) throw new Error("Invalid paged restore arguments");
   const request = {
     repository,
     snapshot: p[0],
     target: p[1],
     prefix: v.prefix ?? "",
-    restoreModes: opts.env?.MOONRESTORE_RESTORE_MODES === "1",
+    restoreModes:
+      v.permissions === true || opts.env?.MOONRESTORE_RESTORE_MODES === "1",
+    ...(v.metadata ? { metadataMode: v.metadata } : {}),
   };
+  if (command === "restore-resumable") {
+    const op = await runEngine(
+      "restore-create",
+      {
+        repository,
+        snapshot: p[0],
+        target: p[1],
+        selections: v.prefix ? [v.prefix] : [],
+        permissions: request.restoreModes,
+        ...(v.metadata ? { metadataMode: v.metadata } : {}),
+        confirmation: p[1],
+      },
+      opts,
+    );
+    return runEngine("restore-run", { repository, id: op.operation }, opts);
+  }
   const preview = await runEngine("restore-preview", request, opts);
   return runEngine(
     "restore",

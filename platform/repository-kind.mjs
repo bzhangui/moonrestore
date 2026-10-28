@@ -9,6 +9,8 @@ const profiles = {
   "moonrestore-encrypted-repository-v3\n": { format: 3, encrypted: true },
   "moonrestore-paged-repository-v4\n": { format: 4, encrypted: false },
   "moonrestore-paged-encrypted-v4\n": { format: 4, encrypted: true },
+  "moonrestore-fidelity-repository-v5\n": { format: 5, encrypted: false },
+  "moonrestore-fidelity-encrypted-v5\n": { format: 5, encrypted: true },
 };
 export function repositoryKind(repository) {
   const root = checked(repository),
@@ -19,7 +21,7 @@ export function repositoryKind(repository) {
     throw new Error("Unsupported repository format");
   return {
     ...profiles[magic],
-    paged: profiles[magic].format === 4,
+    paged: profiles[magic].format >= 4,
     physical_independence_verified: false,
   };
 }

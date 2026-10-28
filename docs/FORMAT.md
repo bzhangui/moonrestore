@@ -1,5 +1,15 @@
 # 仓库格式与兼容
 
+## 0.10.0：显式format5与私有恢复日志
+
+旧格式不原地修改。format5标识为 `moonrestore-fidelity-repository-v5\n` / `moonrestore-fidelity-encrypted-v5\n`，目录和内容页/包编码沿用format4；根format为5且必须含fidelity引用，旧程序明确拒绝新标识。
+
+fidelity引用为 `{version:1, platform:win32|linux|darwin, pages:Number, last_page:SHA, entries:Number, bytes:十进制String}`。entries必须是内容根entries+1（源根目录）；元数据页为 `{fidelity:1,sequence,previous,records}`，独立有序链，经原SHA/AES-GCM信封绑定。每条包含path、kind、atime_ns/mtime_ns/birthtime_ns十进制字符串、mode、uid/gid、group（null或同inode组摘要）及平台native属性。内容路径/种类一一对应，范围不能越过对应文件，组内长度/内容摘要及元数据一致；重复、链错、字节计数错、未知扩展与预算溢出拒绝。
+
+同platform不等于同文件系统或权限能力。原生恢复必须显式允许权限并完成原生读回；portable有损回退明确报告。支持范围、特殊属性损失、预算及新CLI见 [0.10指南](RELIABILITY_0_10.md)。GC/物理复制完整索引包括fidelity页；format5换主密钥重建暂拒绝，不用文件系统往返悄悄改变元数据。
+
+format4/5恢复写出日志位于私有state目录，独立HMAC绑定仓库/操作/条目，密文库日志也加密，既非快照也非独立备份。续作验证精确目标/暂存身份与真实前缀；无日志或身份不明不接管，不保证所有指令间崩溃都自动续作。目录/文件创建与身份落盘窄窗口可能安全拒绝，原件/陌生目标不被覆盖。
+
 ## 0.9.0：保持字节格式，扩展引擎
 
 格式1/2/3/4不变。0.9接入工作台/计划/选择恢复/巡检/分页远端回执和认证重扫续作，见 [操作指南](RELIABILITY_0_9.md)。持久提示与操作日志是私有状态，不是新仓库格式；缓存不授权删除，日志不是独立备份。位置适配版本1仍为不可变pack SHA+offset，整理产生新仓库/新ID映射，不透明替换位置。坏不可变对象保留，合法JSON空白或有效未引用块使新对象获得不同身份，绝不覆盖坏历史。下面0.8“尚未接入”是历史描述。
