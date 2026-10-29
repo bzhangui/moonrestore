@@ -2,13 +2,15 @@
 
 用 MoonBit 实现的可验证增量备份与恢复工具。面向论文、代码、实验资料及小团队文件资产：不仅保存历史，还检查损坏范围、演练恢复，并对实际读回留下证据。
 
-[公开源码](https://github.com/bzhangui/moonrestore) · [CI](https://github.com/bzhangui/moonrestore/actions) · [Mooncakes 0.5.0](https://mooncakes.io/docs/bzhangui/moonrestore) · [测试报告](docs/QUALITY_REPORT.md) · [更新记录](CHANGELOG.md)
+[公开源码](https://github.com/bzhangui/moonrestore) · [CI](https://github.com/bzhangui/moonrestore/actions) · [Mooncakes 0.11.0](https://mooncakes.io/docs/bzhangui/moonrestore) · [测试报告](docs/QUALITY_REPORT.md) · [更新记录](CHANGELOG.md)
 
 ## 当前源码：0.11.0，MoonBit 恢复写出规划核心
 
 分页恢复续作现由 MoonBit `RestoreWriter` 决定逐块前缀验证长度、稀疏写出区间、逻辑进度和终结条件；发布状态门禁也在核心验证。Node/系统仍负责身份、真实字节比较、短写循环、fsync、ACL与排他发布，不把纯计划当实际恢复成功。见 [0.11使用指南](docs/RELIABILITY_0_11.md)。旧格式和元数据保真边界保留；注册表新版本是否已发布以[发布记录](docs/PUBLICATION.md)为准。
 
 编译门槛已升至moonc≥0.10.16，本轮私有SDK为0.10.18。第一条“主要实现语言”仍有审查风险：虽然领域核心在MoonBit，JavaScript字节数仍明显更多，分页作业/数据库/系统编排仍有Node逻辑。没有修改Linguist或隐藏源码；`node scripts/language-audit.mjs` 可复核实际分工，不能仅凭新增接口宣称九条均已无缺口。
+
+0.11.0核心库已正式发布，`moon add bzhangui/moonrestore@0.11.0` 可安装；独立注册表消费者在四目标检查、release构建和运行通过。源码 `06325b2` 的[四作业CI](https://github.com/bzhangui/moonrestore/actions/runs/40894120603)全部成功。CLI/工作台仍须源码构建；本轮未公开运行包。
 
 ### 0.10.0 历史功能与发布状态
 
