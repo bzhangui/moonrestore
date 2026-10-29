@@ -12,6 +12,9 @@ let chunks : Map[String, @backup.Chunker] = Map([])
 let hashes : Map[String, @backup.Hasher] = Map([])
 
 ///|
+let writers : Map[String, @backup.RestoreWriter] = Map([])
+
+///|
 struct Request {
   action : String
   session : String
@@ -56,6 +59,40 @@ fn command(text : String, bytes : Bytes) -> String {
       "transition" => Json(@backup.operation_transition(r.session, r.previous))
       "restore-prefix" => {
         @backup.validate_restore_prefix(r.entries, r.total, r.chunks)
+        Json::null()
+      }
+      "restore-writer-new" => {
+        guard writers.length() < 16 && !writers.contains(r.session) else {
+          raise @backup.Invalid("restore writer session budget")
+        }
+        let raw = @json.parse(@utf8.decode(bytes))
+        let sparse : Array[@backup.RestoreSpan]? = if raw is Null {
+          None
+        } else {
+          Some(@json.from_json(raw))
+        }
+        writers[r.session] = @backup.RestoreWriter::new(
+          r.total,
+          r.entries,
+          r.chunks,
+          r.sequence == 1,
+          r.count == 1,
+          sparse,
+        )
+        Json::null()
+      }
+      "restore-writer-chunk" => writers[r.session].chunk(r.count).to_json()
+      "restore-writer-finish" => {
+        writers[r.session].finish()
+        writers.remove(r.session) |> ignore
+        Json::null()
+      }
+      "restore-publication" => {
+        @backup.validate_restore_publication(
+          r.previous,
+          r.count == 1,
+          r.sequence == 1,
+        )
         Json::null()
       }
       "fidelity-policy" => {
@@ -159,6 +196,7 @@ fn command(text : String, bytes : Bytes) -> String {
         ledgers.remove(r.session) |> ignore
         chunks.remove(r.session) |> ignore
         hashes.remove(r.session) |> ignore
+        writers.remove(r.session) |> ignore
         Json::null()
       }
       _ => raise @backup.Invalid("unsupported storage bridge action")

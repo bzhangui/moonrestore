@@ -2,11 +2,17 @@ import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { assertCompilerVersion } from "./compiler-version.mjs";
 const project = fileURLToPath(new URL("../", import.meta.url));
+const sdkName = fs.existsSync(
+  path.join(project, ".local", "toolchain-0.10.18", "bin"),
+)
+  ? "toolchain-0.10.18"
+  : "toolchain";
 const local = path.join(
   project,
   ".local",
-  "toolchain",
+  sdkName,
   "bin",
   process.platform === "win32" ? "moon.exe" : "moon",
 );
@@ -43,21 +49,7 @@ export function versionCheck() {
     env: moonEnv,
   });
   if (result.status !== 0) throw new Error("MoonBit unavailable");
-  const match = result.stdout.match(/moonc v(\d+)\.(\d+)\.(\d+)/);
-  if (!match) throw new Error("Unknown MoonBit version");
-  const version = match.slice(1).map(Number),
-    minimum = [0, 10, 15];
-  let comparison = 0;
-  for (let i = 0; i < 3; i++) {
-    if (version[i] !== minimum[i]) {
-      comparison = version[i] > minimum[i] ? 1 : -1;
-      break;
-    }
-  }
-  if (comparison < 0)
-    throw new Error(
-      "MoonRestore requires moonc >= 0.10.15; install a compatible SDK or set MOON_BIN/MOON_HOME",
-    );
+  assertCompilerVersion(result.stdout);
   return result.stdout.trim();
 }
 if (process.argv[1] === fileURLToPath(import.meta.url)) {

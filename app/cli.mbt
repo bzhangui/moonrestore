@@ -1,7 +1,7 @@
 ///|
 fn help() -> String {
   let text =
-    #|MoonRestore 0.8 — verifiable incremental backups
+    #|MoonRestore 0.11 — verifiable incremental backups
     #|Usage: node bin/moonrestore.mjs <command> ...
     #|  init <repository>                       Create a NEW repository
     #|  backup <repository> <source>             Backup a directory tree
@@ -143,7 +143,7 @@ pub fn run(args : Array[String]) -> Unit raise {
     return
   }
   if args[0] == "version" {
-    println("MoonRestore 0.10.0")
+    println("MoonRestore 0.11.0")
     return
   }
   if args[0] == "operation-transition" {

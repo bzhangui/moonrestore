@@ -8,7 +8,7 @@ import {
 }
 
 // Values
-pub fn capacity_state(Int64, Int64, Int64) -> Int raise BackupError
+pub fn capacity_state(Int64, Int64, Int64) -> Int32 raise BackupError
 
 pub fn check_json_depth(String) -> Unit raise BackupError
 
@@ -26,29 +26,29 @@ pub fn digest(Bytes) -> String
 
 pub fn encode_with_metadata(Snapshot, Array[FileMetadata], limits? : Limits) -> String raise
 
-pub fn evidence_state(String, String, Int64, Int64, Int64) -> Int raise
+pub fn evidence_state(String, String, Int64, Int64, Int64) -> Int32 raise
 
 pub fn operation_transition(String, String) -> Bool
 
-pub fn path_order(String, String) -> Int
+pub fn path_order(String, String) -> Int32
 
 pub fn recovery_goal(Int64, Int64, Int64, Int64, Bool) -> RecoveryGoal raise
 
 pub fn rescue_entries(Snapshot, Array[String], Array[String]) -> Array[Entry] raise BackupError
 
-pub fn retention_keep(Array[RetentionRecord], Int, Int, Int, Int, Array[String]) -> Array[String] raise BackupError
+pub fn retention_keep(Array[RetentionRecord], Int32, Int32, Int32, Int32, Array[String]) -> Array[String] raise BackupError
 
-pub fn retirement_clock_ready(Int64, Int64, Int64, Int64, Int) -> Bool raise
+pub fn retirement_clock_ready(Int64, Int64, Int64, Int64, Int32) -> Bool raise
 
-pub fn retirement_ready(Int64, Int64, Int) -> Bool raise
+pub fn retirement_ready(Int64, Int64, Int32) -> Bool raise
 
-pub fn schedule_due(Bool, Bool, Int, Int, Int64, Int64, Int64, Int64) -> Bool raise
+pub fn schedule_due(Bool, Bool, Int32, Int32, Int64, Int64, Int64, Int64) -> Bool raise
 
 pub fn schedule_health(Bool, Bool, Bool, Int64, Int64, Int64, Int64) -> String raise
 
 pub fn select_entries(Snapshot, Array[String]) -> Array[Entry] raise BackupError
 
-pub fn source_change_state(Int, Int, Bool, Int) -> Int raise BackupError
+pub fn source_change_state(Int32, Int32, Bool, Int32) -> Int32 raise BackupError
 
 pub fn text_digest(String) -> String
 
@@ -58,13 +58,15 @@ pub fn validate_checkpoint_entry(Entry, ChunkConfig, Limits) -> Unit raise
 
 pub fn validate_fidelity_policy(String, String, String, Bool) -> Unit raise
 
-pub fn validate_page_link(Int, String, Int, Int) -> Unit raise
+pub fn validate_page_link(Int32, String, Int32, Int32) -> Unit raise
 
 pub fn validate_path(String) -> Unit raise BackupError
 
 pub fn validate_restore_prefix(Int64, Int64, Int64) -> Unit raise
 
-pub fn verification_batch(Snapshot, Int, Int, Int64) -> VerificationBatch raise BackupError
+pub fn validate_restore_publication(String, Bool, Bool) -> Unit raise
+
+pub fn verification_batch(Snapshot, Int32, Int32, Int64) -> VerificationBatch raise BackupError
 
 pub fn verify_chunk(ChunkRef, Bytes) -> Unit raise BackupError
 
@@ -87,9 +89,9 @@ pub fn Change::to_json(Self) -> Json
 pub fn Change::to_repr(Self) -> @debug.Repr
 
 pub(all) struct ChunkConfig {
-  min_size : Int
-  average_size : Int
-  max_size : Int
+  min_size : Int32
+  average_size : Int32
+  max_size : Int32
 } derive(Eq, ToJson, @debug.Debug, @json.FromJson)
 pub fn ChunkConfig::default() -> Self
 pub fn ChunkConfig::equal(Self, Self) -> Bool
@@ -101,7 +103,7 @@ pub fn ChunkConfig::validate(Self) -> Unit raise BackupError
 
 pub(all) struct ChunkRef {
   id : String
-  size : Int
+  size : Int32
 } derive(Eq, ToJson, @debug.Debug, @json.FromJson)
 pub fn ChunkRef::equal(Self, Self) -> Bool
 pub fn ChunkRef::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
@@ -112,7 +114,7 @@ pub fn ChunkRef::to_repr(Self) -> @debug.Repr
 pub struct Chunker {
   config : ChunkConfig
   buffer : Array[Byte]
-  mut rolling : UInt
+  mut rolling : UInt32
 }
 pub fn Chunker::finish(Self) -> Bytes?
 pub fn Chunker::new(config? : ChunkConfig) -> Self raise BackupError
@@ -134,7 +136,7 @@ pub fn Entry::to_repr(Self) -> @debug.Repr
 pub(all) struct FileMetadata {
   path : String
   mtime_ms : Int64
-  mode : Int
+  mode : Int32
 } derive(Eq, ToJson, @debug.Debug, @json.FromJson)
 pub fn FileMetadata::equal(Self, Self) -> Bool
 pub fn FileMetadata::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
@@ -150,11 +152,11 @@ pub fn Hasher::new() -> Self
 pub fn Hasher::update(Self, Bytes) -> Unit
 
 pub(all) struct Limits {
-  max_files : Int
+  max_files : Int32
   max_file_bytes : Int64
   max_total_bytes : Int64
-  max_chunks : Int
-  max_manifest_bytes : Int
+  max_chunks : Int32
+  max_manifest_bytes : Int32
 } derive(Eq, ToJson, @debug.Debug, @json.FromJson)
 pub fn Limits::default() -> Self
 pub fn Limits::equal(Self, Self) -> Bool
@@ -164,7 +166,7 @@ pub fn Limits::not_equal(Self, Self) -> Bool
 pub fn Limits::to_json(Self) -> Json
 pub fn Limits::to_repr(Self) -> @debug.Repr
 pub fn Limits::validate(Self) -> Unit raise BackupError
-pub fn Limits::validate_for_format(Self, Int) -> Unit raise BackupError
+pub fn Limits::validate_for_format(Self, Int32) -> Unit raise BackupError
 
 pub struct PagedLedger {
   mut entries : Int64
@@ -184,7 +186,7 @@ pub(all) struct PagedRecord {
   id : String
   size : Int64
   pack : String
-  offset : Int
+  offset : Int32
 } derive(ToJson, @debug.Debug, @json.FromJson)
 pub fn PagedRecord::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn PagedRecord::to_json(Self) -> Json
@@ -198,6 +200,35 @@ pub(all) struct RecoveryGoal {
 } derive(ToJson)
 pub fn RecoveryGoal::to_json(Self) -> Json
 
+pub(all) struct RestoreSpan {
+  start : Int64
+  length : Int64
+} derive(ToJson, @debug.Debug, @json.FromJson)
+pub fn RestoreSpan::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn RestoreSpan::to_json(Self) -> Json
+pub fn RestoreSpan::to_repr(Self) -> @debug.Repr
+
+pub(all) struct RestoreWritePlan {
+  verify : Int32
+  offset : Int64
+  end : Int64
+  writes : Array[RestoreSpan]
+  checkpoint : Bool
+} derive(ToJson, @debug.Debug)
+pub fn RestoreWritePlan::to_json(Self) -> Json
+pub fn RestoreWritePlan::to_repr(Self) -> @debug.Repr
+
+pub struct RestoreWriter {
+  declared : Int64
+  prefix : Int64
+  published : Bool
+  sparse : Array[RestoreSpan]?
+  mut position : Int64
+}
+pub fn RestoreWriter::chunk(Self, Int32) -> RestoreWritePlan raise
+pub fn RestoreWriter::finish(Self) -> Unit raise
+pub fn RestoreWriter::new(Int64, Int64, Int64, Bool, Bool, Array[RestoreSpan]?) -> Self raise
+
 pub(all) struct RetentionRecord {
   id : String
   created : String
@@ -205,7 +236,7 @@ pub(all) struct RetentionRecord {
 pub fn RetentionRecord::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 
 pub(all) struct Snapshot {
-  format : Int
+  format : Int32
   created : String
   label : String
   config : ChunkConfig
@@ -221,8 +252,8 @@ pub fn Snapshot::validate(Self, limits? : Limits) -> Unit raise BackupError
 
 pub(all) struct VerificationBatch {
   paths : Array[String]
-  next : Int
-  total : Int
+  next : Int32
+  total : Int32
   bytes : Int64
 } derive(ToJson)
 pub fn VerificationBatch::to_json(Self) -> Json

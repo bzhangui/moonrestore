@@ -262,6 +262,11 @@ export async function runPagedRestore(
       throw new Error("Restore stage identity changed");
     const published = fs.existsSync(r.target),
       tree = published ? r.target : path.join(r.stage, "tree");
+    store.core("restore-publication", {
+      previous: r.phase,
+      count: published ? 1 : 0,
+      sequence: fs.existsSync(path.join(r.stage, "tree")) ? 1 : 0,
+    });
     if (
       identity(tree) !== r.treeIdentity ||
       (published && !["publishing", "completed"].includes(r.phase))
@@ -289,7 +294,6 @@ export async function runPagedRestore(
       current,
       active = false,
       position = 0,
-      prefix = 0,
       receiptName,
       meta,
       completeFile = false;
@@ -360,7 +364,26 @@ export async function runPagedRestore(
             total: current.size,
             chunks: r.active.offset,
           });
-          prefix = s.size;
+          store.core(
+            "restore-writer-new",
+            {
+              session,
+              entries: String(s.size),
+              total: current.size,
+              chunks: r.active.offset,
+              count: published ? 1 : 0,
+            },
+            Buffer.from(
+              JSON.stringify(
+                meta?.native.sparse
+                  ? meta.native.ranges.map(([start, length]) => ({
+                      start,
+                      length,
+                    }))
+                  : null,
+              ),
+            ),
+          );
         } else {
           const saved = journal.read(receiptName);
           if (saved.identity !== identity(output) || saved.path !== row.path)
@@ -369,12 +392,27 @@ export async function runPagedRestore(
           const s = fs.fstatSync(fd);
           if (s.size !== Number(current.size))
             throw new Error("Completed restore file changed");
-          prefix = s.size;
+          store.core(
+            "restore-writer-new",
+            {
+              session,
+              entries: String(s.size),
+              total: current.size,
+              chunks: String(s.size),
+              sequence: 1,
+              count: published ? 1 : 0,
+            },
+            Buffer.from("null"),
+          );
         }
         store.core("hash-new", { session });
       } else if (row.kind === "chunk" && active) {
         const bytes = store.chunk(row);
-        const already = Math.max(0, Math.min(bytes.length, prefix - position));
+        const plan = store.core("restore-writer-chunk", {
+          session,
+          count: bytes.length,
+        });
+        const already = plan.verify;
         if (already) {
           const found = Buffer.alloc(already);
           if (
@@ -383,18 +421,10 @@ export async function runPagedRestore(
           )
             throw new Error("Restore staged prefix changed; never overwritten");
         }
-        if (already < bytes.length) {
-          if (published) throw new Error("Published file incomplete");
-          const ranges = meta?.native.sparse
-            ? meta.native.ranges
-            : [[String(position + already), String(bytes.length - already)]];
-          for (const range of ranges) {
-            const from = Math.max(position + already, Number(range[0])),
-              to = Math.min(
-                position + bytes.length,
-                Number(range[0]) + Number(range[1]),
-              );
-            if (to <= from) continue;
+        if (plan.checkpoint) {
+          for (const range of plan.writes) {
+            const from = Number(range.start),
+              to = from + Number(range.length);
             let at = from - position;
             while (position + at < to) {
               const n = fs.writeSync(
@@ -408,16 +438,17 @@ export async function runPagedRestore(
               at += n;
             }
           }
-          fs.ftruncateSync(fd, position + bytes.length);
+          fs.ftruncateSync(fd, Number(plan.end));
           fs.fsyncSync(fd);
           store.fail("restore-written");
-          r.active.offset = String(position + bytes.length);
+          r.active.offset = String(plan.end);
           journal.save("head", r);
           store.fail("restore-checkpoint");
         }
         store.core("hash-push", { session }, bytes);
-        position += bytes.length;
+        position = Number(plan.end);
       } else if (row.kind === "end" && active) {
+        store.core("restore-writer-finish", { session });
         if (
           position !== Number(current.size) ||
           store.core("hash-finish", { session }) !== current.hash

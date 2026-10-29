@@ -34,6 +34,13 @@ fn main {
     assert_eq(@backup.evidence_state(id, "other", 100L, 110L, 20L), 3)
     assert_true(@backup.schedule_due(true, false, 0, 3, 100L, 110L, 105L, 20L))
     assert_false(@backup.schedule_due(true, false, 0, 3, 100L, 99L, 105L, 20L))
+    // 0.11 recovery plans verify an uncheckpointed crash-ahead prefix.
+    let writer = @backup.RestoreWriter::new(8L, 3L, 2L, false, false, None)
+    let first = writer.chunk(4)
+    assert_eq(first.verify, 3)
+    assert_eq(first.writes[0].start, 3L)
+    ignore(writer.chunk(4))
+    writer.finish()
     println("snapshot=\{id}; chunks=\{pieces.length()}; verified=true")
   } catch {
     e => abort("example failed: \{e}")

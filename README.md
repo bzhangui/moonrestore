@@ -4,7 +4,13 @@
 
 [公开源码](https://github.com/bzhangui/moonrestore) · [CI](https://github.com/bzhangui/moonrestore/actions) · [Mooncakes 0.5.0](https://mooncakes.io/docs/bzhangui/moonrestore) · [测试报告](docs/QUALITY_REPORT.md) · [更新记录](CHANGELOG.md)
 
-## 当前源码：0.10.0 开发版；Mooncakes：0.5.0
+## 当前源码：0.11.0，MoonBit 恢复写出规划核心
+
+分页恢复续作现由 MoonBit `RestoreWriter` 决定逐块前缀验证长度、稀疏写出区间、逻辑进度和终结条件；发布状态门禁也在核心验证。Node/系统仍负责身份、真实字节比较、短写循环、fsync、ACL与排他发布，不把纯计划当实际恢复成功。见 [0.11使用指南](docs/RELIABILITY_0_11.md)。旧格式和元数据保真边界保留；注册表新版本是否已发布以[发布记录](docs/PUBLICATION.md)为准。
+
+编译门槛已升至moonc≥0.10.16，本轮私有SDK为0.10.18。第一条“主要实现语言”仍有审查风险：虽然领域核心在MoonBit，JavaScript字节数仍明显更多，分页作业/数据库/系统编排仍有Node逻辑。没有修改Linguist或隐藏源码；`node scripts/language-audit.mjs` 可复核实际分工，不能仅凭新增接口宣称九条均已无缺口。
+
+### 0.10.0 历史功能与发布状态
 
 0.10增加format4/5恢复写出续作：验证自有暂存前缀后继续、完成文件与整树读回、发布不确定性对账；显式新format5归档原生元数据（Windows ACL/ADS、安全属性、稀疏；POSIX xattr/ACL、uid/gid及精确时间；所选内部硬链接）。原生恢复须同平台、显式允许权限且全部读回通过；便携降级必须明确选择并报告损失，不承诺所有文件系统元数据。见 [0.10使用指南](docs/RELIABILITY_0_10.md)。旧库不原地改写，本轮仅推送源码，不发布Mooncakes/运行包。
 
@@ -53,7 +59,7 @@ node bin/moonrestore.mjs archive-import ARCHIVE EXTERNAL_CHECKSUM NEW_REPO
 
 ## 安装与最小示例
 
-需要 moonc ≥ 0.10.15、Node ≥ 22.16.0（推荐当前 LTS）。Linux/macOS 还需系统 C 工具链用于排他目录提交和元数据帮助程序；Windows使用系统.NET Framework4.x自带C#编译器构建元数据帮助程序，不提权。无 npm 第三方运行依赖。构建优先用可选 `.local/toolchain`，否则使用系统 SDK；可设 `MOON_BIN` / `MOON_HOME`。
+需要 moonc ≥ 0.10.16、Node ≥ 22.16.0（推荐当前 LTS）。Linux/macOS 还需系统 C 工具链用于排他目录提交和元数据帮助程序；Windows使用系统.NET Framework4.x自带C#编译器构建元数据帮助程序，不提权。无 npm 第三方运行依赖。构建优先用可选 `.local/toolchain-0.10.18`，再查 `.local/toolchain`，否则使用系统 SDK；可设 `MOON_BIN` / `MOON_HOME`。本轮仅安装独立私有SDK，不改变全局配置。
 
 ```sh
 git clone https://github.com/bzhangui/moonrestore.git
