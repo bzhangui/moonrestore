@@ -21,7 +21,7 @@ if (embedded) {
 }
 const build = spawnSync(
   process.execPath,
-  [path.join(project, "scripts", "build.mjs")],
+  [path.join(project, "scripts", "build.mjs"), "--frozen"],
   { cwd: project, stdio: "inherit" },
 );
 if (build.error || build.status !== 0)

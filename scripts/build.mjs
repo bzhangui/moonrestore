@@ -57,8 +57,16 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
   if (major < 22 || (major === 22 && minor < 16))
     throw new Error("Node >= 22.16.0 required (SQLite online backup)");
   versionCheck();
-  run(moon, ["update"]);
-  run(moon, ["build", "--target", "js", "--release", "--deny-warn"]);
+  const frozen = process.argv.includes("--frozen");
+  if (!frozen) run(moon, ["update"]);
+  run(moon, [
+    "build",
+    "--target",
+    "js",
+    "--release",
+    "--deny-warn",
+    ...(frozen ? ["--frozen"] : []),
+  ]);
   run(process.execPath, ["scripts/build-fidelity.mjs"]);
   if (process.platform !== "win32") {
     const dir = path.join(project, "_build", "host");
