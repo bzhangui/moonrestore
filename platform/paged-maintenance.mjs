@@ -90,18 +90,30 @@ function scan(store, index, batch) {
       }
     }
     const selected = [];
+    store.core("gc-planner-new", {
+      session,
+      sequence: roots,
+      count: candidates,
+      total: String(batch),
+    });
     for (const row of index.db
       .prepare("SELECT payload FROM garbage ORDER BY k")
       .iterate()) {
       const value = JSON.parse(row.payload);
       store.core("hash-push", { session }, Buffer.from(row.payload + "\n"));
-      if (selected.length < batch) {
+      if (store.core("gc-planner-select", { session, total: value.size })) {
         const raw = bounded(source(store, value), 8388704);
         value.sha256 = store.logical(raw);
         selected.push(value);
-        bytes += raw.length;
       }
     }
+    const summary = store.core("gc-planner-finish", { session });
+    if (
+      summary.selected !== selected.length ||
+      summary.candidates !== candidates
+    )
+      throw new Error("GC planner/IO inventory mismatch");
+    bytes = summary.bytes;
     const inventory = store.core("hash-finish", { session });
     const confirmation = store.logical(
       Buffer.from(JSON.stringify({ inventory, batch, selected })),

@@ -74,18 +74,14 @@ export async function backupPaged(
     index = new PagedIndex(store),
     ledger = randomUUID();
   const hashSession = randomUUID(),
-    chunkSession = randomUUID();
+    chunkSession = randomUUID(),
+    pageWriter = randomUUID();
   let sourceRoot;
   let fidelity,
     cache,
     history,
     invalidObjects = 0,
     page = [],
-    sequence = 0,
-    previous = "",
-    entries = 0,
-    chunks = 0,
-    total = 0,
     sourceSequence = 0,
     queue = [],
     packBytes = 6,
@@ -119,8 +115,12 @@ export async function backupPaged(
     history = loadHistory(store, index, { cache, full: fullHistory });
     seed?.(index);
     store.core("ledger-new", { session: ledger });
+    store.core("page-writer-new", { session: pageWriter });
     const flushPage = () => {
       if (!page.length) return;
+      const { pages: sequence, previous } = store.core("page-writer-state", {
+        session: pageWriter,
+      });
       const value = { format: 4, sequence, previous, records: page };
       let bytes = Buffer.from(JSON.stringify(value));
       store.core("page", { sequence, previous, count: page.length }, bytes);
@@ -146,23 +146,20 @@ export async function backupPaged(
         }
       store.write("page", digest, bytes);
       store.read("page", digest);
-      previous = digest;
-      sequence++;
+      store.core("page-writer-seal", { session: pageWriter, previous: digest });
       page = [];
     };
     const emit = (value) => {
-      store.core("ledger-record", { session: ledger, record: value });
-      if (
-        page.length === 128 ||
-        Buffer.byteLength(JSON.stringify({ ...value })) +
-          Buffer.byteLength(JSON.stringify(page)) >
-          250000
-      )
+      const count = Buffer.byteLength(JSON.stringify(value));
+      if (store.core("page-writer-needs", { session: pageWriter, count }))
         flushPage();
+      store.core("ledger-record", { session: ledger, record: value });
+      store.core("page-writer-record", {
+        session: pageWriter,
+        record: value,
+        count,
+      });
       page.push(value);
-      if (value.kind === "dir" || value.kind === "file") entries++;
-      if (value.kind === "file") total += Number(value.size);
-      if (value.kind === "chunk") chunks++;
     };
     const flushPack = () => {
       if (!queue.length) return;
@@ -370,6 +367,13 @@ export async function backupPaged(
     visit(sourceRoot);
     flushPack();
     flushPage();
+    const summary = store.core("page-writer-state", { session: pageWriter });
+    if (summary.records !== 0) throw new Error("Unsealed page stream");
+    const entries = Number(summary.entries),
+      chunks = Number(summary.chunks),
+      total = summary.total,
+      sequence = summary.pages,
+      previous = summary.previous;
     for (let i = 0; i < sourceSequence; i++) {
       const initial = index.get("source", i),
         current = fs.lstatSync(checked(path.join(sourceRoot, initial.path)), {
@@ -457,6 +461,7 @@ export async function backupPaged(
     store.core("close", { session: ledger });
     store.core("close", { session: hashSession });
     store.core("close", { session: chunkSession });
+    store.core("close", { session: pageWriter });
     try {
       index.close();
     } finally {

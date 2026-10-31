@@ -15,6 +15,12 @@ let hashes : Map[String, @backup.Hasher] = Map([])
 let writers : Map[String, @backup.RestoreWriter] = Map([])
 
 ///|
+let page_writers : Map[String, @backup.PagedWriter] = Map([])
+
+///|
+let gc_planners : Map[String, @backup.GCPlanner] = Map([])
+
+///|
 struct Request {
   action : String
   session : String
@@ -51,6 +57,46 @@ fn command(text : String, bytes : Bytes) -> String {
     }
     let r : Request = @json.from_json(@json.parse(text))
     let value : Json = match r.action {
+      "page-writer-new" => {
+        guard page_writers.length() < 16 && !page_writers.contains(r.session) else {
+          raise @backup.Invalid("page writer budget")
+        }
+        page_writers[r.session] = @backup.PagedWriter::new()
+        Json::null()
+      }
+      "page-writer-needs" => Json(page_writers[r.session].needs_page(r.count))
+      "page-writer-record" => {
+        guard r.record is Some(record) else {
+          raise @backup.Invalid("page record required")
+        }
+        page_writers[r.session].record(record, r.count)
+        Json::null()
+      }
+      "page-writer-seal" => {
+        page_writers[r.session].seal_page(r.previous)
+        Json::null()
+      }
+      "page-writer-state" => page_writers[r.session].summary().to_json()
+      "gc-planner-new" => {
+        guard gc_planners.length() < 16 && !gc_planners.contains(r.session) else {
+          raise @backup.Invalid("GC planner session budget")
+        }
+        guard r.total >= 1L && r.total <= 1000L else {
+          raise @backup.Invalid("GC batch conversion budget")
+        }
+        gc_planners[r.session] = @backup.GCPlanner::new(
+          r.sequence,
+          r.count,
+          r.total.to_int(),
+        )
+        Json::null()
+      }
+      "gc-planner-select" => Json(gc_planners[r.session].select(r.total))
+      "gc-planner-finish" => {
+        let summary = gc_planners[r.session].finish()
+        gc_planners.remove(r.session) |> ignore
+        summary.to_json()
+      }
       "digest" => Json(@backup.digest(bytes))
       "path" => {
         @backup.validate_path(r.session)
@@ -197,6 +243,8 @@ fn command(text : String, bytes : Bytes) -> String {
         chunks.remove(r.session) |> ignore
         hashes.remove(r.session) |> ignore
         writers.remove(r.session) |> ignore
+        page_writers.remove(r.session) |> ignore
+        gc_planners.remove(r.session) |> ignore
         Json::null()
       }
       _ => raise @backup.Invalid("unsupported storage bridge action")

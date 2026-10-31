@@ -144,6 +144,24 @@ pub fn FileMetadata::not_equal(Self, Self) -> Bool
 pub fn FileMetadata::to_json(Self) -> Json
 pub fn FileMetadata::to_repr(Self) -> @debug.Repr
 
+pub(all) struct GCPlanSummary {
+  candidates : Int32
+  selected : Int32
+  bytes : Int64
+} derive(ToJson)
+pub fn GCPlanSummary::to_json(Self) -> Json
+
+pub struct GCPlanner {
+  candidates : Int32
+  batch : Int32
+  mut seen : Int32
+  mut selected : Int32
+  mut bytes : Int64
+}
+pub fn GCPlanner::finish(Self) -> GCPlanSummary raise
+pub fn GCPlanner::new(Int32, Int32, Int32) -> Self raise
+pub fn GCPlanner::select(Self, Int64) -> Bool raise
+
 pub struct Hasher {
   context : @crypto.SHA256
 }
@@ -168,6 +186,16 @@ pub fn Limits::to_repr(Self) -> @debug.Repr
 pub fn Limits::validate(Self) -> Unit raise BackupError
 pub fn Limits::validate_for_format(Self, Int32) -> Unit raise BackupError
 
+pub(all) struct PageWriteSummary {
+  pages : Int32
+  previous : String
+  records : Int32
+  entries : Int64
+  chunks : Int64
+  total : Int64
+} derive(ToJson)
+pub fn PageWriteSummary::to_json(Self) -> Json
+
 pub struct PagedLedger {
   mut entries : Int64
   mut chunks : Int64
@@ -191,6 +219,21 @@ pub(all) struct PagedRecord {
 pub fn PagedRecord::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn PagedRecord::to_json(Self) -> Json
 pub fn PagedRecord::to_repr(Self) -> @debug.Repr
+
+pub struct PagedWriter {
+  mut pages : Int32
+  mut previous : String
+  mut records : Int32
+  mut encoded : Int32
+  mut entries : Int64
+  mut chunks : Int64
+  mut total : Int64
+}
+pub fn PagedWriter::needs_page(Self, Int32) -> Bool raise
+pub fn PagedWriter::new() -> Self
+pub fn PagedWriter::record(Self, PagedRecord, Int32) -> Unit raise
+pub fn PagedWriter::seal_page(Self, String) -> Unit raise
+pub fn PagedWriter::summary(Self) -> PageWriteSummary
 
 pub(all) struct RecoveryGoal {
   evidence_current : Bool

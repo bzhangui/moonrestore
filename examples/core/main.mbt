@@ -41,6 +41,19 @@ fn main {
     assert_eq(first.writes[0].start, 3L)
     ignore(writer.chunk(4))
     writer.finish()
+    // 0.12 owns page boundaries and acknowledged page-chain progress.
+    let pages = @backup.PagedWriter::new()
+    assert_false(pages.needs_page(100))
+    pages.record(
+      { kind: "file", path: "sample", id: "", size: 18L, pack: "", offset: 0, },
+      100,
+    )
+    pages.seal_page(@backup.text_digest("page"))
+    assert_eq(pages.summary().pages, 1)
+    let gc = @backup.GCPlanner::new(1, 2, 1)
+    assert_true(gc.select(100L))
+    assert_false(gc.select(200L))
+    assert_eq(gc.finish().selected, 1)
     println("snapshot=\{id}; chunks=\{pieces.length()}; verified=true")
   } catch {
     e => abort("example failed: \{e}")
