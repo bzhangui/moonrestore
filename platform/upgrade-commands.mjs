@@ -13,6 +13,7 @@ export async function upgradeCommand(args) {
       "paged-capabilities",
       "paged-replica",
       "paged-rebuild",
+      "paged-repair",
       "paged-retirement-preview",
       "paged-retirement-request",
       "paged-retirement-finalize",
@@ -56,6 +57,13 @@ export async function upgradeCommand(args) {
       "permissions",
     ],
   );
+  if (command === "paged-repair" && p.length === 4 && !Object.keys(v).length)
+    return runEngine("repair", {
+      repository: p[0],
+      donor: p[1],
+      snapshot: p[2],
+      destination: p[3],
+    });
   if (
     command === "fidelity-init" &&
     p.length === 1 &&

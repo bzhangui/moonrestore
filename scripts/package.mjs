@@ -65,6 +65,9 @@ const files = [
   "platform/snapshot-provider.mjs",
   "platform/vss-native.mjs",
   "platform/paged-store.mjs",
+  "platform/capability-matrix.mjs",
+  "platform/application-contract.mjs",
+  "platform/object-receiver.mjs",
   "platform/paged-cache.mjs",
   "platform/paged-journal.mjs",
   "platform/paged-selection.mjs",
@@ -75,6 +78,7 @@ const files = [
   "platform/paged-compat.mjs",
   "platform/paged-copy.mjs",
   "platform/paged-remote.mjs",
+  "platform/paged-remote-audit.mjs",
   "platform/paged-retention.mjs",
   "platform/paged-scrub.mjs",
   "platform/engine-client.mjs",
@@ -99,6 +103,7 @@ const files = [
   "platform/recovery-policy.mjs",
   "platform/attestation.mjs",
   "platform/distribution.mjs",
+  "platform/bundle-transition.mjs",
   "platform/rescue-kit.mjs",
   "platform/support.mjs",
   "ui/index.html",
@@ -108,6 +113,7 @@ const files = [
   "ui/recovery.js",
   "ui/durable.js",
   "ui/readiness.js",
+  "ui/restore-wizard.js",
   "_build/js/release/build/cmd/main/main.js",
   "_build/js/release/build/cmd/storage/storage.js",
   "examples/demo.mjs",
@@ -134,6 +140,8 @@ const files = [
   "docs/UPGRADE_0_9.md",
   "docs/RELIABILITY_0_9.md",
   "docs/RELIABILITY_0_10.md",
+  "docs/RELIABILITY_0_11.md",
+  "docs/RELIABILITY_0_12.md",
 ];
 files.push(
   "_build/host/" + (process.platform === "win32" ? "fidelity.exe" : "fidelity"),
@@ -254,6 +262,8 @@ const manifest = {
   files: hashes,
   ...(runtime ? { runtime } : {}),
   application_signed: false,
+  supported_repository_formats: [1, 2, 3, 4, 5],
+  automatic_state_downgrade: false,
 };
 fs.writeFileSync(
   path.join(destination, "manifest.json"),

@@ -11,12 +11,15 @@
     <a class="skip" href="#main">跳到主要内容</a>
     <div class="shell">
       <aside>
-        <div class="brand">MoonRestore<span>本机备份工作台 · 0.5</span></div>
+        <div class="brand">
+          MoonRestore<span>本机备份工作台 · 0.12 源码版</span>
+        </div>
         <nav aria-label="主导航">
           <a href="#overview">任务概览</a><a href="#setup">配置备份</a
           ><a href="#versions">版本与恢复</a><a href="#evidence">校验与演练</a
           ><a href="#recovery">应急救援与健康</a
-          ><a href="#durable-operations">可靠任务与续作</a>
+          ><a href="#durable-operations">可靠任务与续作</a
+          ><a href="#restore-workflow">恢复向导</a>
         </nav>
         <div class="boundary">
           <strong>你的文件，留在本机。</strong>
@@ -38,6 +41,144 @@
         <div id="message" role="status" aria-live="polite">
           准备就绪。请先配置任务，或直接打开已有仓库。
         </div>
+        <section
+          id="restore-workflow"
+          class="restore-workflow"
+          aria-labelledby="restore-workflow-title"
+        >
+          <div class="section-title">
+            <div>
+              <p class="eyebrow">RECOVERY / 01—03</p>
+              <h2 id="restore-workflow-title">先确认范围，再恢复资料。</h2>
+            </div>
+            <span>原库保留 · 仅写新目录</span>
+          </div>
+          <ol class="workflow-steps" aria-label="恢复阶段">
+            <li id="workflow-step-1" aria-current="step">01 核对仓库与权限</li>
+            <li id="workflow-step-2">02 完整校验后恢复</li>
+            <li id="workflow-step-3">03 验证应用资料</li>
+          </ol>
+          <form id="restore-wizard-form">
+            <div class="form-grid">
+              <label
+                >仓库路径<input
+                  id="wizard-repository"
+                  required
+                  autocomplete="off"
+                  placeholder="E:\MoonRestoreVault"
+              /></label>
+              <label
+                >快照 ID<input
+                  id="wizard-snapshot"
+                  required
+                  pattern="[a-f0-9]{64}"
+                  autocomplete="off"
+                  spellcheck="false"
+              /></label>
+              <label
+                >全新恢复目录<input
+                  id="wizard-target"
+                  required
+                  autocomplete="off"
+                  placeholder="D:\Recovered-review"
+              /></label>
+              <label
+                >元数据策略<select id="wizard-metadata">
+                  <option value="basic">基础属性（格式1—4）</option>
+                  <option value="native">
+                    原生元数据（格式5，需明确授权）
+                  </option>
+                  <option value="portable">
+                    跨平台内容恢复（格式4/5，有损）
+                  </option>
+                </select></label
+              >
+            </div>
+            <label class="check"
+              ><input
+                id="wizard-permissions"
+                type="checkbox"
+              />允许写入已归档的权限及平台属性（原生模式必须勾选；不提权）</label
+            >
+            <div class="actions">
+              <button type="submit">1. 核对能力并预览</button
+              ><button id="wizard-apply" type="button" disabled>
+                2. 确认写入新目录
+              </button>
+            </div>
+            <label class="check"
+              ><input
+                id="wizard-consent"
+                type="checkbox"
+              />我已核对预览、目标路径及元数据损失；不覆盖已有资料</label
+            >
+            <p
+              id="wizard-summary"
+              class="workflow-feedback"
+              role="status"
+              aria-live="polite"
+            >
+              尚未预览。格式5原生恢复要求平台匹配、现有用户权限及独立读回；不承诺保留所有文件系统元数据。
+            </p>
+          </form>
+          <details>
+            <summary>恢复写出中断？查询并继续原操作</summary>
+            <form id="writer-resume-form">
+              <div class="form-grid">
+                <label
+                  >原仓库路径<input
+                    id="writer-repository"
+                    required
+                    autocomplete="off" /></label
+                ><label
+                  >原操作 ID<input
+                    id="writer-operation"
+                    required
+                    pattern="[a-f0-9-]{36}"
+                    autocomplete="off"
+                /></label>
+              </div>
+              <label class="check"
+                ><input
+                  id="writer-recover"
+                  type="checkbox"
+                />原工作进程已退出；允许核对失效租约后接管（不会跳过内容校验）</label
+              >
+              <div class="actions">
+                <button id="writer-status" type="button" class="secondary">
+                  查询操作</button
+                ><button type="submit">核验暂存前缀并继续</button>
+              </div>
+              <p>
+                仅格式4/5使用此入口。原来的备份任务续作入口仍保留；二者操作 ID
+                不混用。
+              </p>
+            </form>
+          </details>
+          <details>
+            <summary>3. 检查恢复后的应用资料（可选）</summary>
+            <form id="application-contract-form">
+              <label
+                >已恢复的资料根目录<input
+                  id="application-root"
+                  required
+                  autocomplete="off" /></label
+              ><label
+                >私有验收契约 JSON<textarea
+                  id="application-contract-json"
+                  required
+                  rows="6"
+                  spellcheck="false"
+                  placeholder='{"format":1,"json":[{"path":"config.json","equals":{"schemaVersion":1}}]}'
+                ></textarea></label
+              ><button type="submit">只读检查文件、配置和数据库附件</button>
+              <p id="application-result" role="status">
+                只检查你声明的约束，不运行应用、脚本或任意
+                SQL；通过不代表业务全覆盖或采集时跨文件原子一致。
+              </p>
+            </form>
+          </details>
+        </section>
         <section id="overview">
           <div class="section-title">
             <h2>备份任务</h2>
@@ -479,7 +620,11 @@
         >
         <template id="restore-extra-template"
           ><label class="check"
-            ><input id="restore-modes" type="checkbox" />显式允许恢复权限：旧格式为 POSIX 基础权限；format5 同平台恢复 ACL/扩展属性（可能限制访问）。便携有损模式见 CLI 指南。</label
+            ><input
+              id="restore-modes"
+              type="checkbox"
+            />显式允许恢复权限：旧格式为 POSIX 基础权限；format5 同平台恢复
+            ACL/扩展属性（可能限制访问）。便携有损模式见 CLI 指南。</label
           ><button id="open-restored" type="button" class="secondary" hidden>
             打开恢复目录
           </button></template
@@ -1078,6 +1223,7 @@
         <script type="module" src="/recovery.js"></script>
         <script type="module" src="/durable.js"></script>
         <script type="module" src="/readiness.js"></script>
+        <script type="module" src="/restore-wizard.js"></script>
       </main>
     </div>
   </body>

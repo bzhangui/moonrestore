@@ -666,10 +666,12 @@ test("format5 is encrypted, copies retain metadata pages, GC keeps all live meta
       const replica = path.join(f.base, "replica");
       await copyPaged(repo, replica);
       assert.equal((await verifyPaged(replica, b.snapshot)).format, 5);
-      await assert.rejects(
-        rebuildPaged(repo, path.join(f.base, "rebuild"), { encrypted: false }),
-        /metadata rewrite/,
-      );
+      const rebuilt = await rebuildPaged(repo, path.join(f.base, "rebuild"), {
+        encrypted: false,
+      });
+      assert.equal(rebuilt.archived_metadata_bytes_preserved, true);
+      assert.equal(rebuilt.plaintext_staging_used, false);
+      await verifyPaged(path.join(f.base, "rebuild"), rebuilt.mapping[0].to);
       const p = await previewPagedRestore(replica, b.snapshot, target, {
         metadataMode: "portable",
       });

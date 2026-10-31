@@ -15,17 +15,79 @@ import {
 } from "./maintenance.mjs";
 import { publishDirectory } from "./adapter.mjs";
 import { credentials, checkpoint } from "./activity.mjs";
+import { repositoryKind } from "./repository-kind.mjs";
+import { PagedStore, PagedIndex } from "./paged-store.mjs";
+import { physicalMembers } from "./paged-copy.mjs";
+import { verifyPaged } from "./paged-operations.mjs";
 const maxSegment = 1048576,
   maxPage = 4194304,
   maxRoot = 2097152;
 const id = (s) => typeof s === "string" && /^[a-f0-9]{64}$/.test(s);
-const member = (s) =>
+const member = (s, paged = false) =>
   s === "moonrestore" ||
   s === "encryption.json" ||
   s === "repository-id" ||
-  /^snapshots\/[a-f0-9]{64}\.json$/.test(s) ||
-  (/^objects\/[a-f0-9]{2}\/[a-f0-9]{64}$/.test(s) &&
+  (paged
+    ? /^(snapshots|pages|packs)\/[a-f0-9]{64}$/.test(s)
+    : /^snapshots\/[a-f0-9]{64}\.json$/.test(s)) ||
+  (!paged &&
+    /^objects\/[a-f0-9]{2}\/[a-f0-9]{64}$/.test(s) &&
     s.slice(8, 10) === s.slice(11, 13));
+
+async function archiveSource(repository) {
+  if (!repositoryKind(repository).paged)
+    return {
+      inventory: await validatedInventory(repository),
+      h: openHost(repository, {
+        environment: {
+          ...process.env,
+          ...credentials(repository),
+          MOONRESTORE_READ_ONLY: "1",
+        },
+      }),
+      paged: false,
+    };
+  const store = await PagedStore.open(repository, {
+    environment: { ...process.env, ...credentials(repository) },
+  });
+  let index;
+  try {
+    store.lock();
+    index = new PagedIndex(store);
+    const snapshots = [];
+    for (const id of store.snapshots()) {
+      if (snapshots.length >= 1000) throw new Error("Archive snapshot budget");
+      snapshots.push(id);
+    }
+    if (!snapshots.length)
+      throw new Error("Archive requires at least one snapshot");
+    return {
+      paged: true,
+      format: store.format,
+      snapshots,
+      members: () => physicalMembers(store, index, snapshots),
+      inventory: { before: fingerprint(repository) },
+      h: {
+        repo: store.repo,
+        key: store.key,
+        clean() {
+          try {
+            index.close();
+          } finally {
+            store.close();
+          }
+        },
+      },
+    };
+  } catch (error) {
+    try {
+      index?.close();
+    } finally {
+      store.close();
+    }
+    throw error;
+  }
+}
 function newStage(destination, source) {
   const dest = checked(destination, false),
     parent = checked(path.dirname(dest)),
@@ -58,15 +120,16 @@ export async function exportArchive(
 ) {
   if (typeof compress !== "boolean")
     throw new Error("Invalid compression option");
-  const inventory = await validatedInventory(repository),
-    { dest, stage } = newStage(destination, repository),
-    h = openHost(repository, {
-      environment: {
-        ...process.env,
-        ...credentials(repository),
-        MOONRESTORE_READ_ONLY: "1",
-      },
-    });
+  const prepared = await archiveSource(repository),
+    { inventory, h } = prepared;
+  let target;
+  try {
+    target = newStage(destination, repository);
+  } catch (error) {
+    h.clean();
+    throw error;
+  }
+  const { dest, stage } = target;
   try {
     fs.mkdirSync(path.join(stage, "segments"));
     fs.mkdirSync(path.join(stage, "pages"));
@@ -88,7 +151,7 @@ export async function exportArchive(
     };
     const add = (relative) => {
       if (seen.has(relative)) return;
-      if (!member(relative) || ++members > 100000)
+      if (!member(relative, prepared.paged) || ++members > 100000)
         throw new Error("Archive member budget");
       seen.add(relative);
       checkpoint("archive_export", { members });
@@ -131,29 +194,35 @@ export async function exportArchive(
     add("moonrestore");
     if (h.key) add("encryption.json");
     if (fs.existsSync(path.join(h.repo, "repository-id"))) add("repository-id");
-    for (const snapshot of inventory.snapshots) {
-      for (const e of snapshot.model.entries)
-        for (const c of e.chunks)
-          add(
-            path
-              .relative(h.repo, h.storagePath("object", c.id))
-              .split(path.sep)
-              .join("/"),
-          );
-      add(
-        path
-          .relative(h.repo, h.storagePath("manifest", snapshot.id))
-          .split(path.sep)
-          .join("/"),
-      );
-    }
+    if (prepared.paged) {
+      for (const relative of prepared.members()) add(relative);
+    } else
+      for (const snapshot of inventory.snapshots) {
+        for (const e of snapshot.model.entries)
+          for (const c of e.chunks)
+            add(
+              path
+                .relative(h.repo, h.storagePath("object", c.id))
+                .split(path.sep)
+                .join("/"),
+            );
+        add(
+          path
+            .relative(h.repo, h.storagePath("manifest", snapshot.id))
+            .split(path.sep)
+            .join("/"),
+        );
+      }
     flush();
     if (fingerprint(repository) !== inventory.before)
       throw new Error("Repository changed during archive export");
     const root = Buffer.from(
       JSON.stringify({
-        format: 1,
+        format: prepared.paged ? 2 : 1,
         kind: "moonrestore_segmented_transport",
+        ...(prepared.paged
+          ? { repositoryFormat: prepared.format, snapshots: prepared.snapshots }
+          : {}),
         encrypted: !!h.key,
         pages,
         members,
@@ -174,6 +243,7 @@ export async function exportArchive(
       stored_bytes: storedBytes,
       live_repository_format_changed: false,
       requires_external_checksum: true,
+      repository_format: prepared.format ?? repositoryKind(repository).format,
     };
   } finally {
     h.clean();
@@ -186,7 +256,7 @@ export function* archiveMembers(archive, checksum) {
   if (hash(raw) !== checksum) throw new Error("Archive root checksum mismatch");
   const root = JSON.parse(raw);
   if (
-    root.format !== 1 ||
+    ![1, 2].includes(root.format) ||
     root.kind !== "moonrestore_segmented_transport" ||
     typeof root.encrypted !== "boolean" ||
     !Array.isArray(root.pages) ||
@@ -196,6 +266,16 @@ export function* archiveMembers(archive, checksum) {
     root.members > 100000
   )
     throw new Error("Archive root schema");
+  if (
+    root.format === 2 &&
+    (![4, 5].includes(root.repositoryFormat) ||
+      !Array.isArray(root.snapshots) ||
+      !root.snapshots.length ||
+      root.snapshots.length > 1000 ||
+      root.snapshots.some((v) => !id(v)) ||
+      new Set(root.snapshots).size !== root.snapshots.length)
+  )
+    throw new Error("Paged archive root schema");
   let count = 0,
     total = 0;
   const seen = new Set();
@@ -218,7 +298,7 @@ export function* archiveMembers(archive, checksum) {
       throw new Error("Archive page shape");
     for (const entry of page) {
       if (
-        !member(entry.path) ||
+        !member(entry.path, root.format === 2) ||
         seen.has(entry.path) ||
         ++count > root.members ||
         !Number.isInteger(entry.bytes) ||
@@ -252,12 +332,22 @@ export function* archiveMembers(archive, checksum) {
       yield entry;
     }
   }
-  if (count !== root.members) throw new Error("Archive member count mismatch");
+  if (count !== root.members || total !== root.rawBytes)
+    throw new Error("Archive member count/byte mismatch");
 }
 export async function importArchive(archive, checksum, destination) {
+  const rootBytes = readPrivate(
+    path.join(checked(archive), "archive.json"),
+    maxRoot,
+  );
+  if (!id(checksum) || hash(rootBytes) !== checksum)
+    throw new Error("External archive checksum mismatch");
+  const descriptor = JSON.parse(rootBytes);
   const { dest, stage } = newStage(destination, archive);
   let count = 0;
-  for (const dir of ["objects", "snapshots", "tmp"])
+  for (const dir of descriptor.format === 2
+    ? ["pages", "packs", "snapshots", "tmp", "trash"]
+    : ["objects", "snapshots", "tmp"])
     fs.mkdirSync(path.join(stage, dir), { mode: 0o700 });
   for (const entry of archiveMembers(archive, checksum)) {
     checkpoint("archive_import", { members: count });
@@ -287,9 +377,30 @@ export async function importArchive(archive, checksum, destination) {
     count++;
   }
   // The destination key applies to the imported repository, not the archive path.
-  await core(["audit", stage, "all"], {
-    env: { ...credentials(dest), MOONRESTORE_READ_ONLY: "1" },
-  });
+  const imported = repositoryKind(stage);
+  if (descriptor.format === 2) {
+    if (!imported.paged || imported.format !== descriptor.repositoryFormat)
+      throw new Error("Archive repository format mismatch");
+    const env = { ...process.env, ...credentials(dest) };
+    for (const snapshot of descriptor.snapshots)
+      await verifyPaged(stage, snapshot, { environment: env });
+    const store = await PagedStore.open(stage, { environment: env });
+    try {
+      const ids = [...store.snapshots()].sort();
+      if (
+        JSON.stringify(ids) !== JSON.stringify([...descriptor.snapshots].sort())
+      )
+        throw new Error("Archive snapshot inventory mismatch");
+    } finally {
+      store.close();
+    }
+  } else {
+    if (imported.paged)
+      throw new Error("Legacy archive cannot smuggle a paged repository");
+    await core(["audit", stage, "all"], {
+      env: { ...credentials(dest), MOONRESTORE_READ_ONLY: "1" },
+    });
+  }
   publishDirectory(stage, dest);
   return {
     ok: true,

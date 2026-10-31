@@ -1,10 +1,22 @@
 import { S3Backend } from "./s3.mjs";
 import { options } from "./maintenance.mjs";
-import fs from 'node:fs';
-import path from 'node:path';
-import os from 'node:os';
-import {createHash,createHmac,randomBytes,randomUUID,timingSafeEqual} from 'node:crypto';
-import {stateHome,mkdirPrivate,readPrivate,writePrivate} from './vault.mjs';
+import fs from "node:fs";
+import path from "node:path";
+import os from "node:os";
+import {
+  createHash,
+  createHmac,
+  randomBytes,
+  randomUUID,
+  timingSafeEqual,
+} from "node:crypto";
+import {
+  stateHome,
+  mkdirPrivate,
+  readPrivate,
+  writePrivate,
+} from "./vault.mjs";
+import { auditPagedReceipt } from "./paged-remote-audit.mjs";
 
 const id = (v) => typeof v === "string" && /^[a-f0-9]{64}$/.test(v);
 function receipt(bytes) {
@@ -77,7 +89,7 @@ export async function auditRemote(
     version === "null" ||
     !Number.isInteger(offset) ||
     offset < 0 ||
-    offset > 100003 ||
+    offset > 524288 ||
     !Number.isInteger(batch) ||
     batch < 1 ||
     batch > 1000 ||
@@ -88,20 +100,36 @@ export async function auditRemote(
     now < 0
   )
     throw new Error("Pinned version and bounded audit options required");
-  const read = await backend.get(key, { version, checksum }),
-    r = receipt(read.bytes);
+  const read = await backend.get(key, { version, checksum });
+  if (read.bytes.length > 33554496)
+    throw new Error("Remote receipt byte budget");
+  const parsed = JSON.parse(
+    new TextDecoder("utf-8", { fatal: true }).decode(read.bytes),
+  );
+  if (parsed.format === 2)
+    return auditPagedReceipt(backend, key, read, parsed, {
+      offset,
+      batch,
+      retentionDays,
+      now,
+    });
+  const r = receipt(read.bytes);
   if (offset >= r.members.length)
     throw new Error("Audit offset beyond receipt");
   const selected = r.members.slice(offset, offset + batch),
     minimum = now + retentionDays * 86400000;
-  let retainUntil=Number.MAX_SAFE_INTEGER;
+  let retainUntil = Number.MAX_SAFE_INTEGER;
   const locked = (response) =>
     response.headers.get("x-amz-object-lock-mode") === "COMPLIANCE" &&
     Date.parse(response.headers.get("x-amz-object-lock-retain-until-date")) >=
       minimum;
   if (retentionDays && !locked(read))
     throw new Error("Receipt retention not reported or insufficient");
-  if(retentionDays)retainUntil=Math.min(retainUntil,Date.parse(read.headers.get('x-amz-object-lock-retain-until-date')));
+  if (retentionDays)
+    retainUntil = Math.min(
+      retainUntil,
+      Date.parse(read.headers.get("x-amz-object-lock-retain-until-date")),
+    );
   for (const member of selected) {
     const data = await backend.get(member.key, {
       version: member.version,
@@ -111,7 +139,11 @@ export async function auditRemote(
       throw new Error("Remote member size mismatch");
     if (retentionDays && !locked(data))
       throw new Error("Member retention not reported or insufficient");
-    if(retentionDays)retainUntil=Math.min(retainUntil,Date.parse(data.headers.get('x-amz-object-lock-retain-until-date')));
+    if (retentionDays)
+      retainUntil = Math.min(
+        retainUntil,
+        Date.parse(data.headers.get("x-amz-object-lock-retain-until-date")),
+      );
   }
   return {
     ok: true,
@@ -132,53 +164,235 @@ export async function auditRemote(
     remote_writes: false,
     delete_permission_tested: false,
     real_cloud_provider_verified: false,
-    minimum_retention_until: retentionDays?new Date(retainUntil).toISOString():null,
+    minimum_retention_until: retentionDays
+      ? new Date(retainUntil).toISOString()
+      : null,
   };
 }
-export async function auditRemoteCycle(backend,key,checksum,{cycleId,version,batch=100,retentionDays=0,now=Date.now(),retry=false,recover=false}={}){
-  if(!(backend instanceof S3Backend)||!id(checksum)||!/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/.test(cycleId||'')||typeof version!=='string'||!version||typeof retry!=='boolean'||typeof recover!=='boolean'||!Number.isSafeInteger(now)||now<0)throw new Error('Explicit audit cycle identity/version required');
-  const descriptor={endpoint:backend.config.endpoint,bucket:backend.config.bucket,region:backend.config.region,key,checksum,version,retentionDays};
-  const binding=createHash('sha256').update(JSON.stringify(descriptor)).digest('hex');
-  const folder=mkdirPrivate(path.join(stateHome(),'remote-audit-cycles')),file=path.join(folder,cycleId+'.json'),lock=file+'.lock';
-  const integrity=path.join(folder,'integrity.key');
-  if(!fs.existsSync(integrity)){
-    if(fs.existsSync(file))throw new Error('Audit integrity key missing; start a new cycle in a fresh state');
-    try{writePrivate(integrity,randomBytes(32));}catch(error){if(error.code!=='EEXIST')throw error;}
+export async function auditRemoteCycle(
+  backend,
+  key,
+  checksum,
+  {
+    cycleId,
+    version,
+    batch = 100,
+    retentionDays = 0,
+    now = Date.now(),
+    retry = false,
+    recover = false,
+  } = {},
+) {
+  if (
+    !(backend instanceof S3Backend) ||
+    !id(checksum) ||
+    !/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/.test(
+      cycleId || "",
+    ) ||
+    typeof version !== "string" ||
+    !version ||
+    typeof retry !== "boolean" ||
+    typeof recover !== "boolean" ||
+    !Number.isSafeInteger(now) ||
+    now < 0
+  )
+    throw new Error("Explicit audit cycle identity/version required");
+  const descriptor = {
+    endpoint: backend.config.endpoint,
+    bucket: backend.config.bucket,
+    region: backend.config.region,
+    key,
+    checksum,
+    version,
+    retentionDays,
+  };
+  const binding = createHash("sha256")
+    .update(JSON.stringify(descriptor))
+    .digest("hex");
+  const folder = mkdirPrivate(path.join(stateHome(), "remote-audit-cycles")),
+    file = path.join(folder, cycleId + ".json"),
+    lock = file + ".lock";
+  const integrity = path.join(folder, "integrity.key");
+  if (!fs.existsSync(integrity)) {
+    if (fs.existsSync(file))
+      throw new Error(
+        "Audit integrity key missing; start a new cycle in a fresh state",
+      );
+    try {
+      writePrivate(integrity, randomBytes(32));
+    } catch (error) {
+      if (error.code !== "EEXIST") throw error;
+    }
   }
-  const integrityKey=readPrivate(integrity,32);if(integrityKey.length!==32)throw new Error('Invalid audit integrity key');
-  const mac=record=>createHmac('sha256',integrityKey).update(JSON.stringify(record)).digest('hex');
-  if(fs.existsSync(lock)&&recover){
-    const owner=JSON.parse(readPrivate(path.join(lock,'owner.json'),512));
-    if(owner.host!==os.hostname()||!Number.isSafeInteger(owner.pid)||owner.pid<1)throw new Error('Audit lock identity unavailable');
-    let alive=true;try{process.kill(owner.pid,0);}catch(error){if(error.code==='ESRCH')alive=false;else throw error;}
-    if(alive)throw new Error('Audit cycle still active');
-    fs.unlinkSync(path.join(lock,'owner.json'));fs.rmdirSync(lock);
+  const integrityKey = readPrivate(integrity, 32);
+  if (integrityKey.length !== 32)
+    throw new Error("Invalid audit integrity key");
+  const mac = (record) =>
+    createHmac("sha256", integrityKey)
+      .update(JSON.stringify(record))
+      .digest("hex");
+  if (fs.existsSync(lock) && recover) {
+    const owner = JSON.parse(readPrivate(path.join(lock, "owner.json"), 512));
+    if (
+      owner.host !== os.hostname() ||
+      !Number.isSafeInteger(owner.pid) ||
+      owner.pid < 1
+    )
+      throw new Error("Audit lock identity unavailable");
+    let alive = true;
+    try {
+      process.kill(owner.pid, 0);
+    } catch (error) {
+      if (error.code === "ESRCH") alive = false;
+      else throw error;
+    }
+    if (alive) throw new Error("Audit cycle still active");
+    fs.unlinkSync(path.join(lock, "owner.json"));
+    fs.rmdirSync(lock);
   }
-  fs.mkdirSync(lock,{mode:0o700});writePrivate(path.join(lock,'owner.json'),JSON.stringify({pid:process.pid,host:os.hostname()}));
-  const save=r=>{const temp=file+'.'+randomUUID()+'.tmp';writePrivate(temp,JSON.stringify({record:r,mac:mac(r)}));try{fs.renameSync(temp,file);}finally{if(fs.existsSync(temp))fs.unlinkSync(temp);}};
+  fs.mkdirSync(lock, { mode: 0o700 });
+  writePrivate(
+    path.join(lock, "owner.json"),
+    JSON.stringify({ pid: process.pid, host: os.hostname() }),
+  );
+  const save = (r) => {
+    const temp = file + "." + randomUUID() + ".tmp";
+    writePrivate(temp, JSON.stringify({ record: r, mac: mac(r) }));
+    try {
+      fs.renameSync(temp, file);
+    } finally {
+      if (fs.existsSync(temp)) fs.unlinkSync(temp);
+    }
+  };
   let record;
-  try{
-    if(fs.existsSync(file)){
-      const saved=JSON.parse(readPrivate(file,4096));
-      if(!saved.record||!id(saved.mac)||!timingSafeEqual(Buffer.from(saved.mac,'hex'),Buffer.from(mac(saved.record),'hex')))throw new Error('Audit cursor authentication failed');
-      record=saved.record;
-    }else record={format:1,cycle:cycleId,binding,started:now,updated:now,offset:0,total:null,state:'incomplete',minimumRetention:null};
-    if(record.format!==1||record.cycle!==cycleId||record.binding!==binding||!Number.isSafeInteger(record.offset)||record.offset<0||record.offset>100003||!Number.isSafeInteger(record.started)||!Number.isSafeInteger(record.updated)||now<record.updated||now-record.started>3600000)throw new Error('Audit cycle binding, cursor, clock or freshness invalid; use a new cycle');
-    if(record.state==='failed'&&!retry)throw new Error('Audit cycle failed; explicit retry or new cycle required');
-    if(record.state==='complete'){
-      if(record.total!==record.offset||retentionDays&&record.minimumRetention<now+retentionDays*86400000)throw new Error('Completed observation no longer meets requested retention; use a new cycle');
-      return {...record,ok:true,entire_receipt_checked:true,plaintext_content_verified:false,real_cloud_provider_verified:false,cached_completed_observation:true,new_remote_reads:false};
+  try {
+    if (fs.existsSync(file)) {
+      const saved = JSON.parse(readPrivate(file, 4096));
+      if (
+        !saved.record ||
+        !id(saved.mac) ||
+        !timingSafeEqual(
+          Buffer.from(saved.mac, "hex"),
+          Buffer.from(mac(saved.record), "hex"),
+        )
+      )
+        throw new Error("Audit cursor authentication failed");
+      record = saved.record;
+    } else
+      record = {
+        format: 1,
+        cycle: cycleId,
+        binding,
+        started: now,
+        updated: now,
+        offset: 0,
+        total: null,
+        state: "incomplete",
+        minimumRetention: null,
+      };
+    if (
+      record.format !== 1 ||
+      record.cycle !== cycleId ||
+      record.binding !== binding ||
+      !Number.isSafeInteger(record.offset) ||
+      record.offset < 0 ||
+      record.offset > 524288 ||
+      !Number.isSafeInteger(record.started) ||
+      !Number.isSafeInteger(record.updated) ||
+      now < record.updated ||
+      now - record.started > 3600000
+    )
+      throw new Error(
+        "Audit cycle binding, cursor, clock or freshness invalid; use a new cycle",
+      );
+    if (record.state === "failed" && !retry)
+      throw new Error(
+        "Audit cycle failed; explicit retry or new cycle required",
+      );
+    if (record.state === "complete") {
+      if (
+        record.total !== record.offset ||
+        (retentionDays &&
+          record.minimumRetention < now + retentionDays * 86400000)
+      )
+        throw new Error(
+          "Completed observation no longer meets requested retention; use a new cycle",
+        );
+      return {
+        ...record,
+        ok: true,
+        entire_receipt_checked: true,
+        inventory_uniqueness_verified: false,
+        cleanup_authorized: false,
+        plaintext_content_verified: false,
+        real_cloud_provider_verified: false,
+        cached_completed_observation: true,
+        new_remote_reads: false,
+      };
     }
     let result;
-    try{result=await auditRemote(backend,key,checksum,{version,batch,offset:record.offset,retentionDays,now});}
-    catch(error){save({...record,state:'failed',updated:now});throw error;}
-    if(record.total!==null&&record.total!==result.total)throw new Error('Receipt total changed within audit cycle');
-    const minimum=result.minimum_retention_until?Math.min(record.minimumRetention??Number.MAX_SAFE_INTEGER,Date.parse(result.minimum_retention_until)):null;
-    const completed=result.next_offset===null;
-    if(completed&&retentionDays&&minimum<Math.max(now,Date.now())+retentionDays*86400000){save({...record,state:'failed',updated:now});throw new Error('Retention shortened or insufficient at cycle completion');}
-    record={...record,offset:result.next_offset??result.total,total:result.total,updated:now,state:completed?'complete':'incomplete',minimumRetention:minimum};save(record);
-    return {ok:true,kind:'remote_audit_cycle',cycle:cycleId,state:record.state,checked:record.offset,total:record.total,next_offset:completed?null:record.offset,entire_receipt_checked:completed,observed_at:new Date(now).toISOString(),plaintext_content_verified:false,real_cloud_provider_verified:false,remote_writes:false,delete_permission_tested:false};
-  }finally{integrityKey.fill(0);fs.unlinkSync(path.join(lock,'owner.json'));fs.rmdirSync(lock);}
+    try {
+      result = await auditRemote(backend, key, checksum, {
+        version,
+        batch,
+        offset: record.offset,
+        retentionDays,
+        now,
+      });
+    } catch (error) {
+      save({ ...record, state: "failed", updated: now });
+      throw error;
+    }
+    if (record.total !== null && record.total !== result.total)
+      throw new Error("Receipt total changed within audit cycle");
+    const minimum = result.minimum_retention_until
+      ? Math.min(
+          record.minimumRetention ?? Number.MAX_SAFE_INTEGER,
+          Date.parse(result.minimum_retention_until),
+        )
+      : null;
+    const completed = result.next_offset === null;
+    if (
+      completed &&
+      retentionDays &&
+      minimum < Math.max(now, Date.now()) + retentionDays * 86400000
+    ) {
+      save({ ...record, state: "failed", updated: now });
+      throw new Error(
+        "Retention shortened or insufficient at cycle completion",
+      );
+    }
+    record = {
+      ...record,
+      offset: result.next_offset ?? result.total,
+      total: result.total,
+      updated: now,
+      state: completed ? "complete" : "incomplete",
+      minimumRetention: minimum,
+    };
+    save(record);
+    return {
+      ok: true,
+      kind: "remote_audit_cycle",
+      cycle: cycleId,
+      state: record.state,
+      checked: record.offset,
+      total: record.total,
+      next_offset: completed ? null : record.offset,
+      entire_receipt_checked: completed,
+      inventory_uniqueness_verified: false,
+      cleanup_authorized: false,
+      observed_at: new Date(now).toISOString(),
+      plaintext_content_verified: false,
+      real_cloud_provider_verified: false,
+      remote_writes: false,
+      delete_permission_tested: false,
+    };
+  } finally {
+    integrityKey.fill(0);
+    fs.unlinkSync(path.join(lock, "owner.json"));
+    fs.rmdirSync(lock);
+  }
 }
 export function remoteWriterPolicy(bucket, prefix) {
   if (
@@ -223,7 +437,10 @@ export function remoteWriterPolicy(bucket, prefix) {
 }
 export async function remoteAuditCommand(args) {
   const [c, ...a] = args;
-  if (!["remote-audit", "remote-audit-cycle", "remote-writer-policy"].includes(c)) return null;
+  if (
+    !["remote-audit", "remote-audit-cycle", "remote-writer-policy"].includes(c)
+  )
+    return null;
   if (c === "remote-writer-policy") {
     const { positionals: p } = options(a, []);
     if (p.length !== 2) throw new Error("Expected bucket and prefix");
@@ -240,7 +457,9 @@ export async function remoteAuditCommand(args) {
       "batch",
       "remaining-days",
       "allow-remote",
-      "cycle", "retry", "recover",
+      "cycle",
+      "retry",
+      "recover",
     ],
     ["allow-remote", "retry", "recover"],
   );
@@ -255,14 +474,29 @@ export async function remoteAuditCommand(args) {
     secretAccessKey: process.env.MOONRESTORE_S3_SECRET_ACCESS_KEY,
     sessionToken: process.env.MOONRESTORE_S3_SESSION_TOKEN,
   });
-  if(c==='remote-audit'&&(v.cycle!==undefined||v.retry||v.recover))throw new Error('Cycle options require remote-audit-cycle');
-  if(c==='remote-audit-cycle'&&(v.offset!==undefined||!v.cycle))throw new Error('Cycle requires --cycle new|UUID; offset is controlled by the journal');
-  return (c==='remote-audit-cycle'?auditRemoteCycle:auditRemote)(backend, p[0], p[1], {
-    ...(c==='remote-audit-cycle'?{cycleId:v.cycle==='new'?randomUUID():v.cycle,retry:!!v.retry,recover:!!v.recover}:{}),
-    version: v.version,
-    offset: v.offset === undefined ? 0 : Number(v.offset),
-    batch: v.batch === undefined ? 100 : Number(v.batch),
-    retentionDays:
-      v["remaining-days"] === undefined ? 0 : Number(v["remaining-days"]),
-  });
+  if (c === "remote-audit" && (v.cycle !== undefined || v.retry || v.recover))
+    throw new Error("Cycle options require remote-audit-cycle");
+  if (c === "remote-audit-cycle" && (v.offset !== undefined || !v.cycle))
+    throw new Error(
+      "Cycle requires --cycle new|UUID; offset is controlled by the journal",
+    );
+  return (c === "remote-audit-cycle" ? auditRemoteCycle : auditRemote)(
+    backend,
+    p[0],
+    p[1],
+    {
+      ...(c === "remote-audit-cycle"
+        ? {
+            cycleId: v.cycle === "new" ? randomUUID() : v.cycle,
+            retry: !!v.retry,
+            recover: !!v.recover,
+          }
+        : {}),
+      version: v.version,
+      offset: v.offset === undefined ? 0 : Number(v.offset),
+      batch: v.batch === undefined ? 100 : Number(v.batch),
+      retentionDays:
+        v["remaining-days"] === undefined ? 0 : Number(v["remaining-days"]),
+    },
+  );
 }

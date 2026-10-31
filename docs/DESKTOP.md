@@ -1,5 +1,7 @@
 # Windows 桌面包、安装与升级
 
+当前源码0.12需要moonc≥0.10.16和Node≥22.16；本轮运行包仅可本地验证，不公开发布。新增`bundle-copy-verified`白名单并排复制、带外清单摘要及`bundle-transition-preview`格式交集/回退状态门禁，见[0.12指南](RELIABILITY_0_12.md)。已有C#安装器仍为显式当前用户安装，未获得可信代码签名；下面0.3段落描述历史功能。
+
 0.3.0 提供内置 Node 的 Windows x64 包，与需要外部 Node 的普通便携包区分。桌面包双击 `MoonRestore.exe` 或 `打开工作台.cmd`，在托盘提供重新打开工作台、安全停止。只监听回环，浏览器链接含临时会话授权；不把链接写到磁盘或安装参数。
 
 构建环境需要 Node ≥22、moonc ≥0.10.15、Windows .NET Framework C# 编译器。执行 `npm run package:desktop`。打包脚本从 Node 官方精确版本下载 Windows 运行时，核对官方 SHA-256，保留完整上游 LICENSE 和来源摘要。不会要求用户关闭执行策略、SmartScreen 或杀毒软件；自研 EXE 尚未代码签名，不把清单哈希称为发布者签名。Node 发布者 GPG 签名未独立验证。

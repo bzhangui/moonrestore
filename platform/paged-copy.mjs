@@ -12,10 +12,11 @@ import {
   newFile,
   syncDirectory,
 } from "./paged-store.mjs";
-import { backupPaged, verifyPaged, restorePaged } from "./paged-operations.mjs";
+import { verifyPaged } from "./paged-operations.mjs";
 import { publishDirectory } from "./adapter.mjs";
 import { removeOwned } from "./maintenance.mjs";
 import { checkpoint, credentials } from "./activity.mjs";
+import { validateFidelityRoot } from "./fidelity.mjs";
 export const pagedLayout = {
   version: 1,
   format: 4,
@@ -215,13 +216,9 @@ export async function rebuildPaged(
   )
     throw new Error("Explicit new encryption password required");
   const store = await PagedStore.open(repository, { environment });
-  let stage, temporary;
+  let stage, destinationStore, index;
   try {
     store.lock();
-    if (store.format === 5)
-      throw new Error(
-        "Fidelity rebuild/rekey requires a byte-preserving metadata rewrite; use verified paged-replica. Filesystem round-trip rebuild would change recorded metadata.",
-      );
     if (snapshots === undefined) {
       snapshots = [];
       for (const id of store.snapshots()) {
@@ -248,39 +245,71 @@ export async function rebuildPaged(
       MOONRESTORE_PASSWORD: destinationPassword ?? "",
       MOONRESTORE_KEY_FILE: "",
     };
-    await PagedStore.create(stage, { encrypted, environment: newEnv });
-    temporary = fs.mkdtempSync(
-      path.join(fs.realpathSync(os.tmpdir()), "moonrestore-rebuild-data-"),
-    );
-    const mapping = [];
-    for (const snapshot of snapshots) {
-      const root = store.root(snapshot),
-        plain = path.join(temporary, "restore-" + mapping.length);
-      await restorePaged(repository, snapshot, plain, {
-        environment,
-        permissions: true,
-      });
-      const result = await backupPaged(stage, plain, {
-        label: root.label,
-        environment: newEnv,
-        startedAt: root.created,
-      });
-      await verifyPaged(stage, result.snapshot, { environment: newEnv });
-      mapping.push({ from: snapshot, to: result.snapshot });
-      removeOwned(plain, temporary, "restore-");
-    }
-    const destinationStore = await PagedStore.open(stage, {
+    await PagedStore.create(stage, {
+      encrypted,
+      fidelity: store.format === 5,
       environment: newEnv,
     });
-    let rotated;
-    try {
-      rotated =
-        store.key && destinationStore.key
-          ? store.vault.id !== destinationStore.vault.id
-          : null;
-    } finally {
-      destinationStore.close();
+    destinationStore = await PagedStore.open(stage, { environment: newEnv });
+    destinationStore.lock();
+    index = new PagedIndex(store);
+    const mapping = [];
+    for (const snapshot of snapshots) {
+      const root = indexSnapshot(store, index, snapshot);
+      const copyPage = (pageId) => {
+        const raw = store.read("page", pageId);
+        destinationStore.write("page", pageId, raw);
+        if (!destinationStore.read("page", pageId).equals(raw))
+          throw new Error("Rebuild metadata/page bytes changed");
+        return JSON.parse(
+          new TextDecoder("utf-8", { fatal: true }).decode(raw),
+        );
+      };
+      let next = root.last_page;
+      for (let sequence = root.pages - 1; sequence >= 0; sequence--) {
+        checkpoint("paged_rebuild_page", { sequence });
+        const page = copyPage(next);
+        for (const record of page.records)
+          if (record.kind === "chunk") {
+            if (fs.existsSync(destinationStore.file("pack", record.pack)))
+              continue;
+            store.pack(record.pack);
+            const raw = store.read("pack", record.pack);
+            destinationStore.write("pack", record.pack, raw);
+            destinationStore.pack(record.pack);
+          }
+        next = page.previous;
+      }
+      if (root.fidelity) {
+        next = root.fidelity.last_page;
+        for (
+          let sequence = root.fidelity.pages - 1;
+          sequence >= 0;
+          sequence--
+        ) {
+          checkpoint("paged_rebuild_metadata", { sequence });
+          next = copyPage(next).previous;
+        }
+      }
+      const raw = Buffer.from(
+        JSON.stringify({ ...root, repository: destinationStore.repoId }),
+      );
+      const snapshotId = destinationStore.logical(raw);
+      destinationStore.write("snapshot", snapshotId, raw);
+      const audit = new PagedIndex(destinationStore);
+      try {
+        indexSnapshot(destinationStore, audit, snapshotId);
+      } finally {
+        audit.close();
+      }
+      mapping.push({ from: snapshot, to: snapshotId });
     }
+    const rotated =
+      store.key && destinationStore.key
+        ? store.vault.id !== destinationStore.vault.id
+        : null;
+    destinationStore.close();
+    destinationStore = null;
     syncDirectory(stage);
     publishDirectory(stage, target.dest);
     stage = null;
@@ -292,20 +321,192 @@ export async function rebuildPaged(
       old_repository_unchanged: true,
       new_master_key: rotated,
       old_copies_revoked: false,
-      format: 4,
+      format: store.format,
+      logical_pages_preserved: true,
+      archived_metadata_bytes_preserved: store.format === 5,
       physical_independence_verified: false,
-      plaintext_staging_used: true,
+      plaintext_staging_used: false,
     };
   } catch (e) {
     if (stage) e.staging_retained = true;
     throw e;
   } finally {
-    if (temporary)
-      removeOwned(
-        temporary,
-        fs.realpathSync(os.tmpdir()),
-        "moonrestore-rebuild-data-",
+    try {
+      index?.close();
+    } finally {
+      try {
+        destinationStore?.close();
+      } finally {
+        store.close();
+      }
+    }
+  }
+}
+
+// Two explicit, read-only donors. Publication is always into a new repository;
+// neither source is repaired in place and partial materialization is not success.
+export async function repairPaged(
+  repository,
+  donor,
+  snapshot,
+  destination,
+  {
+    environment = { ...process.env, ...credentials(repository) },
+    donorEnvironment = { ...process.env, ...credentials(donor) },
+  } = {},
+) {
+  if (!/^[a-f0-9]{64}$/.test(snapshot))
+    throw new Error("Exact repair snapshot required");
+  const sources = [];
+  let target, stage, output;
+  try {
+    sources.push(await PagedStore.open(repository, { environment }));
+    sources.push(
+      await PagedStore.open(donor, { environment: donorEnvironment }),
+    );
+    const [a, b] = sources;
+    if (
+      a.repo === b.repo ||
+      a.format !== b.format ||
+      a.repoId !== b.repoId ||
+      a.vault?.id !== b.vault?.id ||
+      a.vault?.check !== b.vault?.check
+    )
+      throw new Error(
+        "Repair donors must have the same repository identity, format and master key",
       );
-    store.close();
+    target = newDestination(
+      repository,
+      destination,
+      ".moonrestore-paged-repair-",
+    );
+    stage = target.stage;
+    const canonical = (v) =>
+      process.platform === "win32"
+        ? path.resolve(v).toLowerCase()
+        : path.resolve(v);
+    if (
+      canonical(stage).startsWith(canonical(b.repo) + path.sep) ||
+      canonical(target.dest).startsWith(canonical(b.repo) + path.sep) ||
+      canonical(b.repo).startsWith(canonical(target.dest) + path.sep) ||
+      canonical(target.dest) === canonical(b.repo)
+    )
+      throw new Error("Repair target overlaps donor");
+    layoutFolders(stage);
+    const headers = [
+      "moonrestore",
+      "repository-id",
+      ...(a.key ? ["encryption.json"] : []),
+    ];
+    const pinned = headers.map((relative) =>
+      bounded(path.join(a.repo, relative), 4096),
+    );
+    for (let i = 0; i < headers.length; i++)
+      newFile(path.join(stage, headers[i]), pinned[i]);
+    output = await PagedStore.open(stage, { environment });
+    output.lock();
+    let recovered = 0,
+      copied = 0;
+    const copy = (kind, id) => {
+      checkpoint("paged_repair_member", { members: copied });
+      if (fs.existsSync(output.file(kind, id))) return output.read(kind, id);
+      let raw,
+        selected = -1;
+      for (let i = 0; i < sources.length; i++)
+        try {
+          if (kind === "pack") sources[i].pack(id);
+          raw = sources[i].read(kind, id);
+          selected = i;
+          break;
+        } catch {}
+      if (selected < 0)
+        throw new Error("No healthy authorized donor for required " + kind);
+      output.write(kind, id, raw);
+      if (kind === "pack") output.pack(id);
+      else if (!output.read(kind, id).equals(raw))
+        throw new Error("Repair readback mismatch");
+      if (selected === 1) recovered++;
+      copied++;
+      return raw;
+    };
+    copy("snapshot", snapshot);
+    const root = output.root(snapshot);
+    validateFidelityRoot(root);
+    let next = root.last_page;
+    for (let i = root.pages - 1; i >= 0; i--) {
+      const page = JSON.parse(
+        new TextDecoder("utf-8", { fatal: true }).decode(copy("page", next)),
+      );
+      if (
+        page.sequence !== i ||
+        !Array.isArray(page.records) ||
+        page.records.length > 128
+      )
+        throw new Error("Repair content chain mismatch");
+      for (const r of page.records)
+        if (r.kind === "chunk") copy("pack", r.pack);
+      next = page.previous;
+    }
+    if (next !== "") throw new Error("Repair content chain incomplete");
+    if (root.fidelity) {
+      next = root.fidelity.last_page;
+      for (let i = root.fidelity.pages - 1; i >= 0; i--) {
+        const page = JSON.parse(
+          new TextDecoder("utf-8", { fatal: true }).decode(copy("page", next)),
+        );
+        if (
+          page.sequence !== i ||
+          !Array.isArray(page.records) ||
+          page.records.length > 128
+        )
+          throw new Error("Repair metadata chain mismatch");
+        next = page.previous;
+      }
+      if (next !== "") throw new Error("Repair metadata chain incomplete");
+    }
+    const audit = new PagedIndex(output);
+    try {
+      indexSnapshot(output, audit, snapshot);
+    } finally {
+      audit.close();
+    }
+    for (const source of sources) {
+      if (
+        source.repoId !==
+        bounded(path.join(source.repo, "repository-id"), 64).toString()
+      )
+        throw new Error("Donor identity changed");
+    }
+    for (let i = 0; i < headers.length; i++)
+      if (!bounded(path.join(a.repo, headers[i]), 4096).equals(pinned[i]))
+        throw new Error("Primary header changed during repair");
+    output.close();
+    output = null;
+    syncDirectory(stage);
+    publishDirectory(stage, target.dest);
+    stage = null;
+    syncDirectory(target.parent);
+    return {
+      ok: true,
+      kind: "paged_two_donor_repair",
+      format: a.format,
+      snapshot,
+      members: copied,
+      donor_members: recovered,
+      sources_changed: false,
+      full_snapshot_audit: true,
+      archived_metadata_bytes_preserved: a.format === 5,
+      new_repository_only: true,
+      physical_independence_verified: false,
+    };
+  } catch (error) {
+    if (stage) error.staging_retained = true;
+    throw error;
+  } finally {
+    try {
+      output?.close();
+    } finally {
+      for (const source of sources) source.close();
+    }
   }
 }

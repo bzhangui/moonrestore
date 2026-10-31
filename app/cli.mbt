@@ -1,7 +1,7 @@
 ///|
 fn help() -> String {
   let text =
-    #|MoonRestore 0.11 — verifiable incremental backups
+    #|MoonRestore 0.12 — verifiable incremental backups
     #|Usage: node bin/moonrestore.mjs <command> ...
     #|  init <repository>                       Create a NEW repository
     #|  backup <repository> <source>             Backup a directory tree
@@ -105,6 +105,13 @@ fn help() -> String {
     #|  paged-selected-restore REPO SHA NEW_TARGET --confirm TOKEN [--selections PRIVATE_JSON --partial]
     #|  paged-replica REPO NEW_REPO [--snapshots SHA,SHA]
     #|  paged-rebuild REPO NEW_REPO [--snapshots SHA,SHA --plaintext]
+    #|  repository-capabilities REPO | paged-repair PRIMARY DONOR SHA NEW_REPO
+    #|  application-validate RESTORED_ROOT PRIVATE_CONTRACT_JSON  Read-only declared checks
+    #|  receiver-init NEW_DIR NAMESPACE | receiver-serve DIR [PORT [--recover]]
+    #|  receiver-push REPO SHA ENDPOINT NAMESPACE  Encrypted paged repositories only
+    #|  receiver-restore ENDPOINT NAMESPACE RECEIPT_KEY SHA NEW_REPO
+    #|  bundle-copy-verified BUNDLE TRUSTED_MANIFEST_SHA NEW_DIR  No activation or state copy
+    #|  bundle-transition-preview CURRENT NEXT CURRENT_SHA NEXT_SHA
     #|  paged-retirement-preview REPO PRIVATE_CONFIG_JSON
     #|  paged-retirement-request REPO PRIVATE_CONFIG_JSON --confirm TOKEN
     #|  paged-retirement-finalize REPO REQUEST_UUID --confirm SECOND_TOKEN
@@ -143,7 +150,7 @@ pub fn run(args : Array[String]) -> Unit raise {
     return
   }
   if args[0] == "version" {
-    println("MoonRestore 0.11.0")
+    println("MoonRestore 0.12.0")
     return
   }
   if args[0] == "operation-transition" {

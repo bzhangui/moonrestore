@@ -72,15 +72,30 @@ export function taskPreview(id, intervalMinutes, kind = "job") {
 }
 function schedulerRpc(action, request) {
   if (process.platform !== "win32") throw new Error("Windows scheduler only");
+  const principal =
+    "$currentSid=[Security.Principal.WindowsIdentity]::GetCurrent().User.Value;$principal=[string]$d.Principal.UserId;if($principal -notmatch '^S-1-'){$principal=(New-Object Security.Principal.NTAccount($principal)).Translate([Security.Principal.SecurityIdentifier]).Value};";
+  const identity =
+    principal +
+    "if($d.Actions.Count -ne 1 -or $d.Triggers.Count -ne 1 -or [Xml.XmlConvert]::ToTimeSpan($d.Triggers.Item(1).Repetition.Interval) -ne [Xml.XmlConvert]::ToTimeSpan($v.interval) -or $d.RegistrationInfo.Description -cne $v.description -or $d.Actions.Item(1).Path -cne $v.executable -or $d.Actions.Item(1).Arguments -cne $v.arguments -or $d.Actions.Item(1).WorkingDirectory -cne $v.working_directory -or $principal -ne $currentSid){throw 'identity mismatch'};";
   const scripts = {
     query:
-      "$v=[Console]::In.ReadToEnd()|ConvertFrom-Json;$s=New-Object -ComObject 'Schedule.Service';$s.Connect();try{$t=$s.GetFolder('\\').GetTask($v.task)}catch{if($_.Exception.HResult -eq -2147024894 -or $_.Exception.HResult -eq -2147216625){@{state='absent'}|ConvertTo-Json -Compress;exit 0};throw};$d=$t.Definition;@{state='present';description=$d.RegistrationInfo.Description;executable=$d.Actions.Item(1).Path;arguments=$d.Actions.Item(1).Arguments;working_directory=$d.Actions.Item(1).WorkingDirectory;actions=$d.Actions.Count;triggers=$d.Triggers.Count;interval=$d.Triggers.Item(1).Repetition.Interval;sid=$d.Principal.UserId;current_sid=[Security.Principal.WindowsIdentity]::GetCurrent().User.Value;enabled=$t.Enabled;running=($t.State -eq 4)}|ConvertTo-Json -Compress",
+      "$v=[Console]::In.ReadToEnd()|ConvertFrom-Json;$s=New-Object -ComObject 'Schedule.Service';$s.Connect();try{$t=$s.GetFolder('\\').GetTask($v.task)}catch{if($_.Exception.HResult -eq -2147024894 -or $_.Exception.HResult -eq -2147216625){@{state='absent'}|ConvertTo-Json -Compress;exit 0};throw};$d=$t.Definition;" +
+      principal +
+      "@{state='present';description=$d.RegistrationInfo.Description;executable=$d.Actions.Item(1).Path;arguments=$d.Actions.Item(1).Arguments;working_directory=$d.Actions.Item(1).WorkingDirectory;actions=$d.Actions.Count;triggers=$d.Triggers.Count;interval=$d.Triggers.Item(1).Repetition.Interval;sid=$principal;current_sid=$currentSid;enabled=$t.Enabled;running=($t.State -eq 4)}|ConvertTo-Json -Compress",
     register:
       "$v=[Console]::In.ReadToEnd()|ConvertFrom-Json;$sid=[Security.Principal.WindowsIdentity]::GetCurrent().User.Value;$s=New-Object -ComObject 'Schedule.Service';$s.Connect();$s.GetFolder('\\').RegisterTask($v.task,$v.xml.Replace('{{SID}}',$sid),2,$sid,$null,3,$null)|Out-Null;@{completed=$true}|ConvertTo-Json -Compress",
     disable:
-      "$v=[Console]::In.ReadToEnd()|ConvertFrom-Json;$s=New-Object -ComObject 'Schedule.Service';$s.Connect();$t=$s.GetFolder('\\').GetTask($v.task);$d=$t.Definition;if($d.Actions.Count -ne 1 -or $d.RegistrationInfo.Description -ne $v.description -or $d.Actions.Item(1).Path -ne $v.executable -or $d.Actions.Item(1).Arguments -cne $v.arguments -or $d.Principal.UserId -ne [Security.Principal.WindowsIdentity]::GetCurrent().User.Value){throw 'identity mismatch'};$t.Enabled=$false;@{completed=$true}|ConvertTo-Json -Compress",
+      "$v=[Console]::In.ReadToEnd()|ConvertFrom-Json;$s=New-Object -ComObject 'Schedule.Service';$s.Connect();$t=$s.GetFolder('\\').GetTask($v.task);$d=$t.Definition;" +
+      identity +
+      "$t.Enabled=$false;@{completed=$true}|ConvertTo-Json -Compress",
     remove:
-      "$v=[Console]::In.ReadToEnd()|ConvertFrom-Json;$s=New-Object -ComObject 'Schedule.Service';$s.Connect();$f=$s.GetFolder('\\');$t=$f.GetTask($v.task);$d=$t.Definition;if($d.Actions.Count -ne 1 -or $d.RegistrationInfo.Description -ne $v.description -or $d.Actions.Item(1).Path -ne $v.executable -or $d.Actions.Item(1).Arguments -cne $v.arguments -or $d.Principal.UserId -ne [Security.Principal.WindowsIdentity]::GetCurrent().User.Value -or $t.State -eq 4){throw 'identity mismatch or running'};$f.DeleteTask($v.task,0);@{completed=$true}|ConvertTo-Json -Compress",
+      "$v=[Console]::In.ReadToEnd()|ConvertFrom-Json;$s=New-Object -ComObject 'Schedule.Service';$s.Connect();$f=$s.GetFolder('\\');$t=$f.GetTask($v.task);$d=$t.Definition;" +
+      identity +
+      "if($t.State -eq 4){throw 'task running'};$f.DeleteTask($v.task,0);@{completed=$true}|ConvertTo-Json -Compress",
+    run:
+      "$v=[Console]::In.ReadToEnd()|ConvertFrom-Json;$s=New-Object -ComObject 'Schedule.Service';$s.Connect();$t=$s.GetFolder('\\').GetTask($v.task);$d=$t.Definition;" +
+      identity +
+      "if($t.State -eq 4 -or -not $t.Enabled){throw 'disabled or running'};$t.Run($null)|Out-Null;@{completed=$true}|ConvertTo-Json -Compress",
   };
   if (!Object.hasOwn(scripts, action))
     throw new Error("Unsupported scheduler operation");
@@ -143,11 +158,26 @@ export class TaskController {
     return r;
   }
   matches(r, q) {
+    const minutes = (v) => {
+      const m =
+        typeof v === "string" &&
+        v.match(/^P(?:(\d+)D)?(?:T(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?)?$/);
+      if (!m || !m.slice(1).some(Boolean)) return null;
+      const result =
+        Number(m[1] ?? 0) * 1440 +
+        Number(m[2] ?? 0) * 60 +
+        Number(m[3] ?? 0) +
+        Number(m[4] ?? 0) / 60;
+      return Number.isSafeInteger(result) && result >= 1 && result <= 10080
+        ? result
+        : null;
+    };
     return (
       q.state === "present" &&
       q.actions === 1 &&
       q.triggers === 1 &&
-      q.interval === r.interval &&
+      minutes(q.interval) !== null &&
+      minutes(q.interval) === minutes(r.interval) &&
       q.sid === q.current_sid &&
       q.description === r.description &&
       q.executable === r.executable &&
@@ -305,6 +335,24 @@ export class TaskController {
       state: q.state,
       registered: q.state === "owned",
       enabled: q.enabled ?? null,
+    };
+  }
+  run(task, confirmation) {
+    if (confirmation !== task)
+      throw new Error("Confirm exact owned task execution");
+    const record = this.load(task),
+      before = this.query(record);
+    if (before.state !== "owned" || before.running || !before.enabled)
+      throw new Error(
+        "Owned enabled non-running task required; execution not attempted",
+      );
+    this.rpc("run", record);
+    return {
+      ok: true,
+      task,
+      execution_requested: true,
+      execution_completed_verified: false,
+      controlled_simulation: this.simulation,
     };
   }
 }

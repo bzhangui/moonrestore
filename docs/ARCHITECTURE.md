@@ -1,5 +1,7 @@
 # 架构与实现边界
 
+当前0.12：MoonBit领域核心增加分页写入确认/批次规划（此前已迁入恢复前缀/发布状态）；Node与原生帮助程序保留真实I/O、加密、SQL、协议和平台属性。格式4/5无损重建、运输、双供体修复及恢复后声明式应用契约已接通，详见[0.12指南](RELIABILITY_0_12.md)。下述0.2/0.4段落为历史记录，关于未实现VSS/分页等描述不是当前能力清单；VSS真实管理员环境仍未验证。
+
 0.4 新增 MoonBit core/recovery.mbt（健康文件选择/巡检范围）及 app/recovery.mbt（逐文件救援/完整校验编排）。platform/recovery-target.mjs 将严格只读源 Host 与受限新目标 writer 分开，避免只读模式拥有源写/恢复写能力。工作台复用同一后端，部分结果和确认失效单独显示。
 
 recovery.mjs 绑定确认、健康供体、独立清单与持久证据；search-index.mjs 是可丢弃非权威缓存；applications.mjs 调用 SQLite 标准在线导出；snapshot-provider.mjs 仅受控租约，无真实 VSS 请求器；s3.mjs/remote.mjs 适配显式授权网络 I/O 和密文副本，最终逻辑清单/内容仍回到 MoonBit audit。没有改变既有仓库编码。

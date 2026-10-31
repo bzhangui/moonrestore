@@ -5,6 +5,7 @@ import path from "node:path";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
+import { pathToFileURL } from "node:url";
 import { removeOwned } from "../platform/maintenance.mjs";
 const bundle = path.resolve(process.argv[2] || "");
 if (!fs.statSync(path.join(bundle, "manifest.json")).isFile())
@@ -265,6 +266,97 @@ try {
     fs.readFileSync(path.join(fidelityTarget, "sample.txt"), "utf8"),
     "controlled portable backup",
   );
+  assert.equal(
+    run(["repository-capabilities", fidelity]).lossless_page_rekey,
+    true,
+  );
+  const fidelityArchive = path.join(root, "fidelity-archive"),
+    fa = run(["archive-export", fidelity, fidelityArchive]);
+  assert.equal(fa.repository_format, 5);
+  const fidelityImported = path.join(root, "fidelity-imported");
+  assert.equal(
+    run(["archive-import", fidelityArchive, fa.checksum, fidelityImported]).ok,
+    true,
+  );
+  const donor = path.join(root, "fidelity-donor");
+  run(["paged-replica", fidelity, donor]);
+  assert.equal(
+    run([
+      "paged-repair",
+      fidelity,
+      donor,
+      fb.snapshot,
+      path.join(root, "fidelity-repair"),
+    ]).full_snapshot_audit,
+    true,
+  );
+  const contractFile = path.join(root, "private-application-contract.json");
+  fs.writeFileSync(
+    contractFile,
+    JSON.stringify({
+      format: 1,
+      files: [
+        {
+          path: "sample.txt",
+          sha256: createHash("sha256")
+            .update("controlled portable backup")
+            .digest("hex"),
+        },
+      ],
+    }),
+  );
+  assert.equal(
+    run(["application-validate", fidelityTarget, contractFile])
+      .declared_contract_verified,
+    true,
+  );
+  const oldPassword = env.MOONRESTORE_PASSWORD;
+  env.MOONRESTORE_DEST_PASSWORD = "synthetic-paged-rotated-password";
+  const rotated = path.join(root, "fidelity-rotated"),
+    rotation = run(["paged-rebuild", fidelity, rotated]);
+  assert.equal(rotation.archived_metadata_bytes_preserved, true);
+  env.MOONRESTORE_PASSWORD = env.MOONRESTORE_DEST_PASSWORD;
+  assert.equal(run(["verify", rotated, rotation.mapping[0].to]).ok, true);
+  env.MOONRESTORE_PASSWORD = oldPassword;
+  const installed = path.join(root, "verified-install");
+  assert.equal(
+    run(["bundle-copy-verified", bundle, manifestHash, installed])
+      .application_started,
+    false,
+  );
+  assert.equal(
+    run([
+      "bundle-transition-preview",
+      bundle,
+      installed,
+      manifestHash,
+      manifestHash,
+    ]).automatic_state_downgrade,
+    false,
+  );
+  const { initObjectReceiver, startObjectReceiver, ReceiverBackend } =
+    await import(
+      pathToFileURL(path.join(bundle, "platform/object-receiver.mjs"))
+    );
+  const receiverDir = path.join(root, "receiver");
+  initObjectReceiver(receiverDir, "owned");
+  const receiver = await startObjectReceiver({
+    directory: receiverDir,
+    writerToken: "synthetic-portable-writer-00000001",
+    adminToken: "synthetic-portable-admin-000000002",
+  });
+  try {
+    const b = new ReceiverBackend({
+        endpoint: "http://127.0.0.1:" + receiver.port,
+        namespace: "owned",
+        credential: "synthetic-portable-writer-00000001",
+      }),
+      bytes = Buffer.from("synthetic opaque encrypted transport"),
+      pin = await b.putImmutable("owned/example", bytes);
+    assert.deepEqual((await b.get("owned/example", pin)).bytes, bytes);
+  } finally {
+    await receiver.close();
+  }
   const shared = run(["backup", paged, source]),
     chosen = path.join(root, "paged-chosen"),
     chosenPreview = run([
@@ -365,6 +457,10 @@ try {
       sqlite_recovery_reopened: true,
       paged_encrypted_backup_and_restore: true,
       fidelity_native_and_resumable_restore: true,
+      fidelity_transport_rekey_and_repair: true,
+      application_contract_from_bundle: true,
+      independent_append_receiver_transport: true,
+      verified_side_by_side_install: true,
     }),
   );
 } finally {

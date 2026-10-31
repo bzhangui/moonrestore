@@ -56,6 +56,7 @@ import {
 import { schedulerCommand } from "./plan-scheduler.mjs";
 import { remoteAuditCommand } from "./remote-audit.mjs";
 import { recoverSqlite } from "./sqlite-recovery.mjs";
+import { capabilityCommand } from "./capability-matrix.mjs";
 import {
   configureSchedule,
   scheduledPlans,
@@ -320,13 +321,30 @@ export async function startWorkbench({
           recover: p.recover === true,
         });
       case "restore-resumable": {
-        object(p, ["repository", "snapshot", "target", "confirmation"]);
-        if (repositoryKind(p.repository).paged)
-          throw new Error(
-            "分页格式请使用已核验的选择恢复；当前不支持恢复写出阶段断点续写，不自动降级为可续作。",
-          );
+        object(p, [
+          "repository",
+          "snapshot",
+          "target",
+          "confirmation",
+          "permissions",
+          "metadataMode",
+        ]);
         if (p.confirmation !== p.target)
           throw new Error("Explicit new target confirmation required");
+        if (repositoryKind(p.repository).paged) {
+          const created = await runEngine("restore-create", p);
+          return runEngine("restore-run", {
+            repository: p.repository,
+            id: created.operation,
+          });
+        }
+        if (
+          (p.metadataMode !== undefined && p.metadataMode !== "basic") ||
+          (p.permissions !== undefined && p.permissions !== false)
+        )
+          throw new Error(
+            "Legacy resumable restore supports basic metadata only",
+          );
         const id = await createOperation({
           repository: p.repository,
           snapshot: p.snapshot,
@@ -334,6 +352,34 @@ export async function startWorkbench({
         });
         return runOperation(p.repository, id);
       }
+      case "restore-capabilities":
+        object(p, ["repository"]);
+        return capabilityCommand(["repository-capabilities", p.repository]);
+      case "restore-writer-create":
+        object(p, [
+          "repository",
+          "snapshot",
+          "target",
+          "confirmation",
+          "permissions",
+          "metadataMode",
+        ]);
+        return runEngine("restore-create", p);
+      case "restore-writer-status":
+      case "restore-writer-resume":
+        object(p, [
+          "repository",
+          "id",
+          ...(route === "restore-writer-resume" ? ["recover"] : []),
+        ]);
+        return runEngine(
+          route === "restore-writer-status" ? "restore-status" : "restore-run",
+          p,
+          { allowFailure: true },
+        );
+      case "application-validate":
+        object(p, ["root", "contract"]);
+        return runEngine("application-validate", p);
       case "scrub":
         object(p, ["repository", "maxFiles", "maxBytes", "snapshot"]);
         return scrub(p.repository, {
@@ -633,6 +679,11 @@ export async function startWorkbench({
     }
   };
   const routes = [
+    "restore-capabilities",
+    "restore-writer-create",
+    "restore-writer-status",
+    "restore-writer-resume",
+    "application-validate",
     "readiness",
     "state-status",
     "state-migrate-preview",
@@ -724,6 +775,7 @@ export async function startWorkbench({
         "/recovery.js",
         "/durable.js",
         "/readiness.js",
+        "/restore-wizard.js",
         "/style.css",
       ].includes(url.pathname)
     ) {
@@ -736,6 +788,7 @@ export async function startWorkbench({
           "/recovery.js": "recovery.js",
           "/durable.js": "durable.js",
           "/readiness.js": "readiness.js",
+          "/restore-wizard.js": "restore-wizard.js",
           "/style.css": "style.css",
         }[url.pathname],
       );

@@ -40,6 +40,10 @@ import { monitorCommand } from "../platform/monitor-receiver.mjs";
 import { pagedOperationCommand } from "../platform/paged-journal.mjs";
 import { pagedCompat } from "../platform/paged-compat.mjs";
 import { upgradeCommand } from "../platform/upgrade-commands.mjs";
+import { capabilityCommand } from "../platform/capability-matrix.mjs";
+import { applicationContractCommand } from "../platform/application-contract.mjs";
+import { receiverCommand } from "../platform/object-receiver.mjs";
+import { bundleCommand } from "../platform/bundle-transition.mjs";
 if (process.env.MOONRESTORE_INTERNAL !== "1" && process.argv[2] === "--home") {
   if (!process.argv[3])
     throw new Error("--home requires a private state directory");
@@ -51,6 +55,10 @@ if (process.env.MOONRESTORE_INTERNAL !== "1") {
     const args = process.argv.slice(2);
     const result = await withParentControl(
       async () =>
+        capabilityCommand(args) ??
+        bundleCommand(args) ??
+        (await receiverCommand(args)) ??
+        (await applicationContractCommand(args)) ??
         (await upgradeCommand(args)) ??
         (await pagedCompat(args)) ??
         (await operationCommand(args)) ??

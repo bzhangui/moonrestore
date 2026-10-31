@@ -350,7 +350,7 @@ export class FidelityWriter {
     };
   }
 }
-export function indexFidelity(store, index, root) {
+export function validateFidelityRoot(root) {
   if (!root.fidelity) return;
   const f = root.fidelity;
   if (
@@ -377,6 +377,11 @@ export function indexFidelity(store, index, root) {
     Number(f.bytes) > 1073741824
   )
     throw new Error("Invalid fidelity root");
+  return f;
+}
+export function indexFidelity(store, index, root) {
+  const f = validateFidelityRoot(root);
+  if (!f) return;
   index.db.exec(
     "CREATE TABLE IF NOT EXISTS fidelity(k TEXT PRIMARY KEY,payload BLOB NOT NULL); DELETE FROM fidelity;",
   );

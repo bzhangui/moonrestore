@@ -7,6 +7,79 @@
   --line: #d9e2e1;
   --muted: #586d70;
 }
+.restore-workflow {
+  border-top: 3px solid var(--accent);
+}
+.workflow-steps {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem 2rem;
+  list-style: none;
+  margin: 1.5rem 0;
+  padding: 0;
+  font-weight: 500;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+.workflow-steps [aria-current="step"] {
+  color: var(--accent);
+  font-weight: 700;
+  border-bottom: 2px solid var(--accent);
+  padding-bottom: 0.5rem;
+}
+.workflow-feedback {
+  padding: 1rem 1.25rem;
+  border-left: 3px solid var(--accent);
+  background: #eef5f2;
+  line-height: 1.8;
+  overflow-wrap: anywhere;
+}
+.restore-workflow textarea {
+  width: 100%;
+  font:
+    0.875rem/1.7 Consolas,
+    monospace;
+  color: inherit;
+  border: 1px solid var(--line);
+  border-radius: 0.4rem;
+  padding: 0.8rem;
+  resize: vertical;
+}
+.restore-workflow select {
+  width: 100%;
+  padding: 0.7rem;
+  border: 1px solid var(--line);
+  border-radius: 0.4rem;
+  background: white;
+}
+.restore-workflow summary {
+  cursor: pointer;
+  padding-block: 1rem;
+  font-weight: 600;
+}
+.restore-workflow details {
+  border-top: 1px solid var(--line);
+  margin-top: 1.25rem;
+}
+.restore-workflow p {
+  max-width: 72ch;
+}
+.restore-workflow textarea:focus-visible,
+.restore-workflow select:focus-visible,
+.restore-workflow summary:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 4px;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .restore-workflow button {
+    transition:
+      background-color 0.2s,
+      transform 0.2s;
+  }
+  .restore-workflow button:active:not(:disabled) {
+    transform: translateY(1px);
+  }
+}
 * {
   box-sizing: border-box;
 }

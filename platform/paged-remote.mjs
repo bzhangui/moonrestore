@@ -50,6 +50,7 @@ export async function pushPaged(
         key = namespace + "/receipt-pages/" + checksum,
         stored = await backend.putImmutable(key, raw);
       pages.push({ key, ...stored });
+      retention &&= stored.server_retention_reported === true;
       page = [];
     };
     for (const relative of physicalMembers(store, index, [snapshot])) {

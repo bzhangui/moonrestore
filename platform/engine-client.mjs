@@ -24,6 +24,7 @@ export function runEngine(
     const replicaCredentials = payload.destination
       ? credentials(payload.destination)
       : {};
+    const donorCredentials = payload.donor ? credentials(payload.donor) : {};
     const folder = mkdirPrivate(path.join(stateHome(), "control")),
       file = path.join(folder, "parent-control-" + randomUUID() + ".json");
     writePrivate(
@@ -40,6 +41,18 @@ export function runEngine(
           ...process.env,
           ...credentials(payload.repository),
           ...env,
+          ...(donorCredentials.MOONRESTORE_PASSWORD !== undefined
+            ? {
+                MOONRESTORE_DONOR_PASSWORD:
+                  donorCredentials.MOONRESTORE_PASSWORD,
+              }
+            : {}),
+          ...(donorCredentials.MOONRESTORE_KEY_FILE !== undefined
+            ? {
+                MOONRESTORE_DONOR_KEY_FILE:
+                  donorCredentials.MOONRESTORE_KEY_FILE,
+              }
+            : {}),
           ...(replicaCredentials.MOONRESTORE_PASSWORD !== undefined
             ? {
                 MOONRESTORE_REPLICA_PASSWORD:

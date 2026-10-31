@@ -146,3 +146,46 @@ test("changing an existing task interval is not falsely reported as idempotent s
     assert.throws(() => controller.install(changed, changed.task), /conflict/);
     assert.equal(mode.writes, 1);
   }));
+
+test("explicit task execution rechecks complete identity and never asserts successful completion from a Run reply", () =>
+  controlled(({ controller, preview, mode }) => {
+    controller.install(preview, preview.task);
+    assert.throws(() => controller.run(preview.task, "wrong"), /Confirm/);
+    const r = controller.run(preview.task, preview.task);
+    assert.equal(r.execution_requested, true);
+    assert.equal(r.execution_completed_verified, false);
+    mode.running = true;
+    assert.throws(
+      () => controller.run(preview.task, preview.task),
+      /non-running/,
+    );
+    mode.running = false;
+    mode.foreign = true;
+    assert.throws(() => controller.run(preview.task, preview.task), /Owned/);
+  }));
+
+test("Windows canonical ISO durations compare semantically while malformed/changed intervals remain conflicts", () =>
+  controlled(({ controller, preview }) => {
+    const r = { interval: "PT1440M" },
+      q = {
+        state: "present",
+        actions: 1,
+        triggers: 1,
+        sid: "same",
+        current_sid: "same",
+        enabled: true,
+        running: false,
+      };
+    for (const interval of ["P1D", "PT24H", "PT1440M", "PT86400S"])
+      assert.equal(controller.matches(r, { ...q, interval }), true);
+    for (const interval of [
+      "P",
+      "PT",
+      "P1M",
+      "P1Y",
+      "PT1441M",
+      "PT-1M",
+      "P999999999999999999999D",
+    ])
+      assert.equal(controller.matches(r, { ...q, interval }), false);
+  }));

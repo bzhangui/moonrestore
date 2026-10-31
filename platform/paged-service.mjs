@@ -22,6 +22,7 @@ import {
 } from "./paged-selection.mjs";
 import { removeOwned, saveReport } from "./maintenance.mjs";
 import { checkpoint } from "./activity.mjs";
+import { repositoryCapabilities } from "./capability-matrix.mjs";
 function fields(value, allowed) {
   if (
     !value ||
@@ -421,6 +422,11 @@ async function key(repository, action, p) {
 }
 export async function engineAction(action, p) {
   switch (action) {
+    case "application-validate":
+      fields(p, ["root", "contract"]);
+      return import("./application-contract.mjs").then((m) =>
+        m.validateApplication(p.root, p.contract),
+      );
     case "fidelity-init":
       fields(p, ["repository", "encrypted"]);
       return PagedStore.create(p.repository, {
@@ -484,6 +490,7 @@ export async function engineAction(action, p) {
             ok: true,
             protocol: 1,
             format: store.format ?? 4,
+            operations: repositoryCapabilities(store.format ?? 4),
             selected_restore: true,
             resumable_restore: "verified_owned_prefix",
             fidelity_format: store.format === 5,
@@ -545,6 +552,22 @@ export async function engineAction(action, p) {
           snapshots: p.snapshots,
           encrypted: flag(p.encrypted ?? true),
           destinationPassword: process.env.MOONRESTORE_DEST_PASSWORD,
+        }),
+      );
+    case "repair":
+      fields(p, ["repository", "donor", "snapshot", "destination"]);
+      return import("./paged-copy.mjs").then((m) =>
+        m.repairPaged(p.repository, p.donor, p.snapshot, p.destination, {
+          donorEnvironment: {
+            ...process.env,
+            ...(process.env.MOONRESTORE_DONOR_PASSWORD !== undefined
+              ? { MOONRESTORE_PASSWORD: process.env.MOONRESTORE_DONOR_PASSWORD }
+              : {}),
+            MOONRESTORE_KEY_FILE:
+              process.env.MOONRESTORE_DONOR_KEY_FILE ??
+              process.env.MOONRESTORE_KEY_FILE ??
+              "",
+          },
         }),
       );
     case "retirement-preview":

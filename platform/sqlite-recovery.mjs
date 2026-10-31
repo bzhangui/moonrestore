@@ -9,7 +9,7 @@ import { activity, checkpoint } from "./activity.mjs";
 export async function verifySqliteRecovery(
   file,
   checks = { format: 1, tables: [] },
-  { timeoutMs = 30000 } = {},
+  { timeoutMs = 30000, referenceRoot } = {},
 ) {
   file = checked(file);
   const stat = fs.lstatSync(file),
@@ -25,12 +25,37 @@ export async function verifySqliteRecovery(
   )
     throw new Error("Invalid bounded SQLite recovery verification");
   checkpoint("sqlite_recovery_verify");
+  const before = fs.lstatSync(file, { bigint: true });
+  const sidecars = () =>
+    Object.fromEntries(
+      ["-wal", "-journal"].map((suffix) => {
+        if (!fs.existsSync(file + suffix)) return [suffix, null];
+        const s = fs.lstatSync(checked(file + suffix), { bigint: true });
+        if (!s.isFile() || s.nlink !== 1n || s.size > 68719476736n)
+          throw new Error("Invalid recovered database sidecar");
+        return [
+          suffix,
+          s.size === 0n
+            ? null
+            : ["dev", "ino", "size", "mtimeNs", "ctimeNs"]
+                .map((k) => String(s[k]))
+                .join(":"),
+        ];
+      }),
+    );
+  if (fs.existsSync(file + "-shm")) {
+    const shm = fs.lstatSync(checked(file + "-shm"));
+    if (!shm.isFile() || shm.nlink !== 1)
+      throw new Error("Invalid recovered SQLite shared-memory sidecar");
+  }
+  const payloadSidecars = sidecars();
   return new Promise((resolve, reject) => {
     const child = spawn(
         process.execPath,
         [
           fileURLToPath(new URL("../bin/sqlite-verify.mjs", import.meta.url)),
           file,
+          ...(referenceRoot ? [checked(referenceRoot)] : []),
         ],
         {
           shell: false,
@@ -67,6 +92,14 @@ export async function verifySqliteRecovery(
         const result = JSON.parse(Buffer.concat(chunks));
         if (result.ok !== true || result.sqlite_integrity_checked !== true)
           throw new Error("Incomplete verification");
+        const after = fs.lstatSync(checked(file), { bigint: true });
+        if (
+          ["dev", "ino", "size", "mtimeNs", "ctimeNs", "nlink"].some(
+            (k) => before[k] !== after[k],
+          ) ||
+          JSON.stringify(payloadSidecars) !== JSON.stringify(sidecars())
+        )
+          throw new Error("Recovered database changed during validation");
         resolve(result);
       } catch (e) {
         reject(e);
