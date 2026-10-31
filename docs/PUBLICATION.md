@@ -16,6 +16,8 @@ moon add bzhangui/moonrestore@0.12.0
 
 Mooncakes交付可移植MoonBit核心库；CLI/工作台仍按源码构建，运行包不公开。新增注册表验证脚本可运行`node scripts/verify-registry.mjs 0.12.0`，输出不含凭据。主要语言占比、跨机/真实云/管理员VSS/可信签名等边界保持不变。
 
+发布提交`bd5de58b95354826a1ff26163288eab4ae6fe526`已推送GitHub；其[CI41207185721](https://github.com/bzhangui/moonrestore/actions/runs/41207185721)四作业全部成功。Windows237通过/3跳过、Linux232通过/8跳过、macOS233通过/7跳过，各240项零失败/取消；独立PG逻辑和物理/WAL/PITR均通过。三系统各45核心×四目标、583/627核心覆盖及包验证通过。后续仅补录已发生的发布/CI证据和README状态，不改变此提交通过验证的功能或注册表消费者代码，不再次发布0.12.0或上传运行包。
+
 ## 0.12.0 源码维护（2026-10-31）
 
 用户授权测试和隐私核查后推送GitHub main；明确不发布Mooncakes或公开运行包。注册表0.11.0保持不变。新核心、格式4/5生命周期、应用验收、接收/审计、工作台及调度维护的本机测试见QUALITY_REPORT。原始日志、截图、运行包及合成夹具留在私有`.local`，不纳入Git。
