@@ -2,11 +2,11 @@
 
 用 MoonBit 实现的可验证增量备份与恢复工具。面向论文、代码、实验资料及小团队文件资产：不仅保存历史，还检查损坏范围、演练恢复，并对实际读回留下证据。
 
-[公开源码](https://github.com/bzhangui/moonrestore) · [CI](https://github.com/bzhangui/moonrestore/actions) · [Mooncakes 0.11.0](https://mooncakes.io/docs/bzhangui/moonrestore) · [测试报告](docs/QUALITY_REPORT.md) · [更新记录](CHANGELOG.md)
+[公开源码](https://github.com/bzhangui/moonrestore) · [CI](https://github.com/bzhangui/moonrestore/actions) · [Mooncakes 核心库](https://mooncakes.io/docs/bzhangui/moonrestore) · [测试报告](docs/QUALITY_REPORT.md) · [更新记录](CHANGELOG.md)
 
-## 当前源码：0.12.0；注册表保留0.11.0
+## 0.12.0：源码工具与 MoonBit 核心库
 
-0.12补齐格式4/5的元数据页无损换主密钥重建、运输归档和双供体新库修复；MoonBit `PagedWriter`/`GCPlanner` 接管分页边界、已落盘页确认和回收批次规划。新增恢复后应用契约（文件/JSON/SQLite附件）、独立追加接收协议、分页远端只读审计、统一恢复/续作工作台，以及按白名单校验的并排安装。源码使用与拒绝预算见 [0.12指南](docs/RELIABILITY_0_12.md)，本轮执行与未验证边界见 [执行记录](docs/UPGRADE_0_12.md)。本轮只推送源码，不发布Mooncakes或公开运行包。
+0.12补齐格式4/5的元数据页无损换主密钥重建、运输归档和双供体新库修复；MoonBit `PagedWriter`/`GCPlanner` 接管分页边界、已落盘页确认和回收批次规划。新增恢复后应用契约（文件/JSON/SQLite附件）、独立追加接收协议、分页远端只读审计、统一恢复/续作工作台，以及按白名单校验的并排安装。源码使用与拒绝预算见 [0.12指南](docs/RELIABILITY_0_12.md)，本轮执行与未验证边界见 [执行记录](docs/UPGRADE_0_12.md)。用户已追加授权发布Mooncakes 0.12.0核心库，实际注册表与独立消费者证据见[发布记录](docs/PUBLICATION.md)；不公开运行包。
 
 ### 0.11基础与验收边界
 
@@ -20,7 +20,7 @@
 
 0.10增加format4/5恢复写出续作：验证自有暂存前缀后继续、完成文件与整树读回、发布不确定性对账；显式新format5归档原生元数据（Windows ACL/ADS、安全属性、稀疏；POSIX xattr/ACL、uid/gid及精确时间；所选内部硬链接）。原生恢复须同平台、显式允许权限且全部读回通过；便携降级必须明确选择并报告损失，不承诺所有文件系统元数据。见 [0.10使用指南](docs/RELIABILITY_0_10.md)。旧库不原地改写，本轮仅推送源码，不发布Mooncakes/运行包。
 
-正式注册表安装使用 `moon add bzhangui/moonrestore@0.11.0`，不包含0.12新增API。CLI/工作台须按下文源码构建，Mooncakes不是Windows二进制下载。[验收进度](docs/ACCEPTANCE.md) 与 [发布记录](docs/PUBLICATION.md) 区分当前与历史证据。
+0.12核心库安装示例为 `moon add bzhangui/moonrestore@0.12.0`，包含新的分页写入和回收规划API；0.11不含这些新增接口。CLI/工作台仍须按下文源码构建，Mooncakes不是Windows二进制下载。[验收进度](docs/ACCEPTANCE.md) 与 [发布记录](docs/PUBLICATION.md) 区分当前与历史证据。
 
 0.9将format4接入普通备份、计划、工作台历史和选择恢复，并增加认证续作、分批巡检、分页加密远端副本、独立救援、保留及WAL诊断等。见 [0.9历史指南](docs/RELIABILITY_0_9.md)。历史章节的“本轮/未发布”只描述当时，不替代当前发布状态；旧库不自动转换。
 
@@ -128,7 +128,7 @@ node bin/moonrestore.mjs sqlite-backup REPO DATABASE_FILE --label "应用备份"
 ```sh
 moon run examples/core --target wasm
 # 独立 MoonBit 项目消费正式发布版
-moon add bzhangui/moonrestore@0.11.0
+moon add bzhangui/moonrestore@0.12.0
 ```
 
 `moon.pkg` 导入 `"bzhangui/moonrestore/core" @backup`。见 [样例](examples/core/main.mbt)、[API](core/pkg.generated.mbti)。

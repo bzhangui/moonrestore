@@ -5,12 +5,57 @@ import { fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";
 import { moon, moonEnv, versionCheck } from "./build.mjs";
 // Source development versions are not automatically published.
-const version = process.argv[2] || "0.5.0";
+const version = process.argv[2];
 if (!/^\d+\.\d+\.\d+$/.test(version))
   throw new Error("Expected an explicit release version");
 const [major, minor] = version.split(".").map(Number),
   recovery = major > 0 || minor >= 4,
-  operations = major > 0 || minor >= 5;
+  operations = major > 0 || minor >= 5,
+  streaming = major > 0 || minor >= 11,
+  paging = major > 0 || minor >= 12;
+const planners = `${
+  streaming
+    ? `///|
+fn verify_restore_writer() -> Unit raise {
+  let writer = @backup.RestoreWriter::new(8L, 3L, 2L, false, false, None)
+  let first = writer.chunk(4)
+  assert_eq(first.verify, 3)
+  assert_eq(first.writes[0].start, 3L)
+  ignore(writer.chunk(4))
+  writer.finish()
+  @backup.validate_restore_publication("completed", true, false)
+}
+
+///|
+test "published restore writer" { verify_restore_writer() }
+`
+    : ""
+}
+${
+  paging
+    ? `///|
+fn verify_paged_planners() -> Unit raise {
+  let pages = @backup.PagedWriter::new()
+  assert_false(pages.needs_page(100))
+  pages.record({kind:"file",path:"sample",id:"",size:18L,pack:"",offset:0}, 100)
+  pages.seal_page(@backup.text_digest("registry consumer page"))
+  assert_eq(pages.summary().pages, 1)
+  assert_eq(pages.summary().records, 0)
+  assert_eq(pages.summary().total, 18L)
+  let gc = @backup.GCPlanner::new(1, 2, 1)
+  assert_true(gc.select(100L))
+  assert_false(gc.select(200L))
+  let summary = gc.finish()
+  assert_eq(summary.candidates, 2)
+  assert_eq(summary.selected, 1)
+  assert_eq(summary.bytes, 100L)
+}
+
+///|
+test "published paged write and GC planners" { verify_paged_planners() }
+`
+    : ""
+}`;
 const extra = recovery
   ? `///|
 fn verify_recovery_operations() -> Unit raise {
@@ -102,7 +147,7 @@ fn verify_maintenance() -> Unit raise {
 }
 
 ///|
-fn main { try { verify_integrity(); verify_maintenance(); ${recovery ? "verify_recovery_operations(); " : ""}println("registry consumer verified") } catch { e => abort("consumer failed: \\{e}") } }
+fn main { try { verify_integrity(); verify_maintenance(); ${recovery ? "verify_recovery_operations(); " : ""}${streaming ? "verify_restore_writer(); " : ""}${paging ? "verify_paged_planners(); " : ""}println("registry consumer verified") } catch { e => abort("consumer failed: \\{e}") } }
 
 ///|
 test "published integrity API" { verify_integrity() }
@@ -111,6 +156,7 @@ test "published integrity API" { verify_integrity() }
 test "published maintenance API" { verify_maintenance() }
 
 ${extra}
+${planners}
 `,
 );
 console.log(versionCheck());
@@ -132,6 +178,8 @@ const report = {
   version,
   ok: true,
   independent_registry_download: true,
+  restore_writer_consumed: streaming,
+  paged_writer_and_gc_consumed: paging,
   targets,
 };
 fs.writeFileSync(

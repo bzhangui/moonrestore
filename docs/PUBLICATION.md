@@ -1,5 +1,21 @@
 # 发布核验记录
 
+## 0.12.0 Mooncakes追加授权发布（2026-10-31）
+
+用户在完成0.12源码交付后明确追加“发布Mooncakes”授权；本次只发布`bzhangui/moonrestore@0.12.0`核心源码包，不创建公开桌面/便携运行包或GitHub Release，不覆盖旧版。下节“不发布”描述的是追加授权前的开发轮次。
+
+- 发布SDK实际为moonc0.10.18；全局SDK仍为0.10.14，未升级或更改全局安装。使用新SDK可执行文件并沿用原登录位置，`whoami`确认账号bzhangui；未复制、显示、提交或上传凭据，临时SDK凭据副本不存在。
+- 本地与抽取后的实际ZIP均通过发布检查，`publish --dry-run`返回202，正式`moon publish`返回200。注册表查询确认version/latest_version均0.12.0、yanked=false、Apache-2.0；[Mooncakes](https://mooncakes.io/docs/bzhangui/moonrestore)可按下方命令安装。
+- 实际上传ZIP共270项，含LICENSE、NOTICE及新增MoonBit核心；无私有目录/申报书/凭据/密钥/备份/原始报告或桌面二进制。上传ZIP与注册表metadata.checksum相同：`349f2d547100f3f9ac187bd01b9d2d1841a511c62a0a76423217579395aadc4b`。原始证据及上传ZIP保存在本机私有目录。
+- 发布前45个不同核心用例在JS/Wasm/Wasm-GC/Native再次全部通过。全新独立工程使用注册表0.12.0依赖，无本地path/workspace替代，四目标检查/release构建/运行及各5个消费者测试均通过，实际调用RestoreWriter、PagedWriter、GCPlanner及原有散列/快照/维护API。
+- README、当前指南和验收第8条同步新版；注册表验证脚本要求显式版本，并新增本轮API消费断言。应用/系统运行时功能未变，既有240项测试与精确三系统/PG CI证据仍绑定下节功能提交，不将发布核心库说成已公开Windows应用或通过真实生产验证。
+
+```sh
+moon add bzhangui/moonrestore@0.12.0
+```
+
+Mooncakes交付可移植MoonBit核心库；CLI/工作台仍按源码构建，运行包不公开。新增注册表验证脚本可运行`node scripts/verify-registry.mjs 0.12.0`，输出不含凭据。主要语言占比、跨机/真实云/管理员VSS/可信签名等边界保持不变。
+
 ## 0.12.0 源码维护（2026-10-31）
 
 用户授权测试和隐私核查后推送GitHub main；明确不发布Mooncakes或公开运行包。注册表0.11.0保持不变。新核心、格式4/5生命周期、应用验收、接收/审计、工作台及调度维护的本机测试见QUALITY_REPORT。原始日志、截图、运行包及合成夹具留在私有`.local`，不纳入Git。

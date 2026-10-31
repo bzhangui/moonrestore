@@ -1,6 +1,6 @@
 # MoonRestore 运行包
 
-具体版本以 manifest.json 为准。当前源码/本地包0.12.0，Mooncakes正式版本仍为0.11.0（不包含0.12新API）；本地运行包不等于公开Release。本轮仅授权GitHub源码推送，不发布Mooncakes或公开运行包。
+具体版本以 manifest.json 为准。当前源码/本地包0.12.0，用户已追加授权发布同版本Mooncakes核心库，实际上传与独立消费证据以源码仓库的发布记录为准。本地运行包不等于公开Release，Mooncakes也不提供桌面二进制；本轮仍不公开运行包。
 
 普通便携包需外部 Node.js ≥22.16.0。若包含 `MoonRestore.exe` 和 `runtime/node.exe`，则为内置运行时的 Windows x64 桌面包，可双击 EXE，无需全局 Node/MoonBit，仍需 Windows .NET Framework 4.x。安装与回退见 `docs/DESKTOP.md`。两种包均无需运行 npm install，EXE 尚未代码签名。
 
